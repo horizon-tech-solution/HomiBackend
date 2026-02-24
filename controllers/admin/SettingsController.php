@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '../../models/Settings.php';
-require_once __DIR__ . '../../models/ActivityLog.php';
+require_once __DIR__ . '/../../models/admin/Settings.php';
+require_once __DIR__ . '/../../models/admin/ActivityLog.php';
 
 class SettingsController {
     private $db;

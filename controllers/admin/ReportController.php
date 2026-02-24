@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '../../models/Report.php';
-require_once __DIR__ . '../../models/ActivityLog.php';
+require_once __DIR__ . '/../../models/admin/Report.php';
+require_once __DIR__ . '/../../models/admin/ActivityLog.php';
 
 class ReportController {
     private $db;

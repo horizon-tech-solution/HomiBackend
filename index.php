@@ -100,7 +100,7 @@ if ($matchedRoute['auth'] ?? false) {
 $handler = $matchedRoute['handler'];
 [$controllerName, $method] = explode('@', $handler);
 
-$controllerFile = __DIR__ . '/controllers/' . $controllerName . '.php';
+$controllerFile = __DIR__ . '/controllers/admin/' . $controllerName . '.php';
 if (!file_exists($controllerFile)) {
     http_response_code(500);
     header('Content-Type: application/json');

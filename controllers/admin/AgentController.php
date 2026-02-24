@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '../../models/Agent.php';
-require_once __DIR__ . '../../models/ActivityLog.php';
+require_once __DIR__ . '/../../models/admin/Agent.php';
+require_once __DIR__ . '/../../models/admin/ActivityLog.php';
 
 class AgentController {
     private $db;

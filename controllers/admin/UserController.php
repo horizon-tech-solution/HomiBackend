@@ -1,6 +1,6 @@
 <?php
-require_once __DIR__ . '../../models/User.php';
-require_once __DIR__ . '../../models/ActivityLog.php';
+require_once __DIR__ . '/../../models/admin/User.php';
+require_once __DIR__ . '/../../models/admin/ActivityLog.php';
 
 class UserController {
     private $db;

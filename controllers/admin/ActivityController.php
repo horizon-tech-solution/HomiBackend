@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '../../models/ActivityLog.php';
+require_once __DIR__ . '/../../models/admin/ActivityLog.php';
 
 class ActivityController {
     private $db;
