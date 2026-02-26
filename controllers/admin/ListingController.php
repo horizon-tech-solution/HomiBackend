@@ -74,4 +74,19 @@ class ListingController {
             jsonResponse(['error' => 'Request failed'], 500);
         }
     }
+    // Add this to ListingController.php
+    public function saveNotes($params) {
+        $id = $params['id'] ?? null;
+        if (!$id) jsonResponse(['error' => 'ID required'], 400);
+        $input = getJsonInput();
+        $notes = $input['notes'] ?? '';
+
+        $sql = "UPDATE listings SET admin_notes = :notes WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        if ($stmt->execute([':id' => $id, ':notes' => $notes])) {
+            jsonResponse(['success' => true]);
+        } else {
+            jsonResponse(['error' => 'Failed to save notes'], 500);
+        }
+    }
 }

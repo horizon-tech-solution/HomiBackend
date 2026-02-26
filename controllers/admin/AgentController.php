@@ -36,11 +36,9 @@ class AgentController {
     public function verify($params) {
         $id = $params['id'] ?? null;
         if (!$id) jsonResponse(['error' => 'ID required'], 400);
-        $input = getJsonInput();
-        $notes = $input['admin_notes'] ?? '';
 
-        if ($this->agentModel->verify($id, $notes)) {
-            $this->logModel->create('agent_verified', $this->admin['name'], "Agent #$id", $notes, 'agent');
+        if ($this->agentModel->verify($id)) {
+            $this->logModel->create('agent_verified', $this->admin['name'], "Agent #$id", '', 'agent');
             jsonResponse(['success' => true]);
         } else {
             jsonResponse(['error' => 'Verification failed'], 500);

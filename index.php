@@ -1,5 +1,6 @@
 <?php
-
+ini_set('display_errors', 0);
+error_reporting(0);
 // ── CORS ──────────────────────────────────────────────────────────────────────
 header('Access-Control-Allow-Origin: http://localhost:5173');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS');

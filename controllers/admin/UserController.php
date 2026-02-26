@@ -19,9 +19,9 @@ class UserController {
     }
 
     public function index() {
-        $role = $_GET['role'] ?? 'all';
+        $role   = $_GET['role']   ?? null;
         $search = $_GET['search'] ?? null;
-        $users = $this->userModel->getAll($role, null, $search);
+        $users  = $this->userModel->getAll($role, null, $search);
         jsonResponse(['data' => $users]);
     }
 

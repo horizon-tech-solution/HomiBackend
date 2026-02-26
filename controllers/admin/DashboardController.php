@@ -1,8 +1,5 @@
 <?php
-require_once __DIR__ . '/../../models/admin/Listing.php';
-require_once __DIR__ . '/../../models/admin/User.php';
 require_once __DIR__ . '/../../models/admin/ActivityLog.php';
-require_once __DIR__ . '/../../models/admin/Report.php';
 
 class DashboardController {
     private $db;
@@ -15,95 +12,68 @@ class DashboardController {
     public function setAdmin($admin) {
         $this->admin = $admin;
     }
+public function stats($params = []) {
+    $totalListings   = (int) $this->db->query("SELECT COUNT(*) FROM listings")->fetchColumn();
+    $pendingListings = (int) $this->db->query("SELECT COUNT(*) FROM listings WHERE status = 'pending'")->fetchColumn();
+    $approvedToday   = (int) $this->db->query("SELECT COUNT(*) FROM listings WHERE status = 'approved' AND DATE(approved_at) = CURDATE()")->fetchColumn();
 
-    public function stats($params = []) {
-        $listingModel = new Listing($this->db);
-        $listings = $listingModel->getAll();
-        $totalListings = count($listings);
-        $pendingListings = count(array_filter($listings, fn($l) => $l['status'] === 'pending'));
+    $totalUsers      = (int) $this->db->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $blockedUsers    = (int) $this->db->query("SELECT COUNT(*) FROM users WHERE status = 'blocked'")->fetchColumn();
+    $verifiedAgents  = (int) $this->db->query("SELECT COUNT(*) FROM users WHERE role = 'agent' AND verification_status = 'verified'")->fetchColumn();
+    $pendingAgents   = (int) $this->db->query("SELECT COUNT(*) FROM users WHERE role = 'agent' AND verification_status = 'pending'")->fetchColumn();
+    $usersThisWeek   = (int) $this->db->query("SELECT COUNT(*) FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetchColumn();
 
-        $userModel = new User($this->db);
-        $users = $userModel->getAll();
-        $totalUsers = count($users);
-        $verifiedAgents = count(array_filter($users, fn($u) => $u['role'] === 'agent' && $u['verification_status'] === 'verified'));
-        $pendingAgents = count(array_filter($users, fn($u) => $u['role'] === 'agent' && $u['verification_status'] === 'pending'));
-        $blockedUsers = count(array_filter($users, fn($u) => $u['status'] === 'blocked'));
+    $openReports     = (int) $this->db->query("SELECT COUNT(*) FROM reports WHERE status = 'open'")->fetchColumn();
+    $highPriority    = (int) $this->db->query("SELECT COUNT(*) FROM reports WHERE status = 'open' AND priority = 'high'")->fetchColumn();
 
-        $reportModel = new Report($this->db);
-        $reports = $reportModel->getAll();
-        $openReports = count(array_filter($reports, fn($r) => $r['status'] === 'open'));
-        $highPriority = count(array_filter($reports, fn($r) => $r['status'] === 'open' && $r['priority'] === 'high'));
-
-        jsonResponse([
-            'totalListings'        => $totalListings,
-            'pendingListings'      => $pendingListings,
-            'registeredUsers'      => $totalUsers,
-            'usersThisWeek'        => 0,
-            'verifiedAgents'       => $verifiedAgents,
-            'pendingAgents'        => $pendingAgents,
-            'openReports'          => $openReports,
-            'highPriorityReports'  => $highPriority,
-            'approvedToday'        => 0,
-            'blockedAccounts'      => $blockedUsers,
-            'monthlyInquiries'     => 0,
-            'avgResponseTimeHours' => 0,
-            'listingsTrend'        => '+0%',
-            'usersTrend'           => '+0%',
-            'agentsTrend'          => '+0%',
-            'reportsTrend'         => '+0%',
-            'inquiriesTrend'       => '+0%',
-        ]);
+    // inquiries table might be empty — use a safe fallback
+    try {
+        $monthlyInquiries = (int) $this->db->query("SELECT COUNT(*) FROM inquiries WHERE created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')")->fetchColumn();
+    } catch (Exception $e) {
+        $monthlyInquiries = 0;
     }
+
+    jsonResponse([
+        'totalListings'        => $totalListings,
+        'pendingListings'      => $pendingListings,
+        'registeredUsers'      => $totalUsers,
+        'usersThisWeek'        => $usersThisWeek,
+        'verifiedAgents'       => $verifiedAgents,
+        'pendingAgents'        => $pendingAgents,
+        'openReports'          => $openReports,
+        'highPriorityReports'  => $highPriority,
+        'approvedToday'        => $approvedToday,
+        'blockedAccounts'      => $blockedUsers,
+        'monthlyInquiries'     => $monthlyInquiries,
+        'avgResponseTimeHours' => 0,
+        'listingsTrend'        => '+0%',
+        'usersTrend'           => '+0%',
+        'agentsTrend'          => '+0%',
+        'reportsTrend'         => '+0%',
+        'inquiriesTrend'       => '+0%',
+    ]);
+}
 
     public function pending($params = []) {
-        $pending = $this->getPendingItems();
-        jsonResponse($pending);
-    }
-
-    public function activity($params = []) {
-        $activityModel = new ActivityLog($this->db);
-        $activity = $activityModel->getAll(null, null, 10);
-        jsonResponse($activity);
-    }
-
-    public function health($params = []) {
-        jsonResponse([
-            ['label' => 'Listings approved within 24h', 'pct' => 82],
-            ['label' => 'Agent verifications complete', 'pct' => 91],
-            ['label' => 'Reports resolved < 48h',       'pct' => 74],
-            ['label' => 'Active listings vs total',     'pct' => 88],
-        ]);
-    }
-
-    public function status($params = []) {
-        jsonResponse([
-            'status'    => 'ok',
-            'message'   => 'Propty API is running',
-            'timestamp' => time()
-        ]);
-    }
-
-    private function getPendingItems() {
         $listingStmt = $this->db->prepare(
-            "SELECT l.*, u.name as submitter_name 
-             FROM listings l 
-             JOIN users u ON l.user_id = u.id 
-             WHERE l.status = 'pending' 
+            "SELECT l.id, l.title, l.area, l.price, l.submitted_at, u.name AS submitter_name
+             FROM listings l
+             JOIN users u ON l.user_id = u.id
+             WHERE l.status = 'pending'
              ORDER BY l.submitted_at DESC LIMIT 5"
         );
         $listingStmt->execute();
-        $pendingListings = $listingStmt->fetchAll(PDO::FETCH_ASSOC);
 
         $agentStmt = $this->db->prepare(
-            "SELECT * FROM users 
-             WHERE role = 'agent' AND verification_status = 'pending' 
+            "SELECT id, name, agency_name, created_at
+             FROM users
+             WHERE role = 'agent' AND verification_status = 'pending'
              ORDER BY created_at DESC LIMIT 5"
         );
         $agentStmt->execute();
-        $pendingAgents = $agentStmt->fetchAll(PDO::FETCH_ASSOC);
 
         $pending = [];
-        foreach ($pendingListings as $l) {
+        foreach ($listingStmt->fetchAll(PDO::FETCH_ASSOC) as $l) {
             $pending[] = [
                 'id'    => $l['id'],
                 'title' => $l['title'],
@@ -112,7 +82,7 @@ class DashboardController {
                 'age'   => $this->timeAgo($l['submitted_at']),
             ];
         }
-        foreach ($pendingAgents as $a) {
+        foreach ($agentStmt->fetchAll(PDO::FETCH_ASSOC) as $a) {
             $pending[] = [
                 'id'    => $a['id'],
                 'title' => $a['name'] . ' — Agent Application',
@@ -122,7 +92,39 @@ class DashboardController {
             ];
         }
 
-        return $pending;
+        jsonResponse($pending);
+    }
+
+    public function activity($params = []) {
+        $stmt = $this->db->prepare(
+            "SELECT id, action, actor, target, detail, category, created_at
+             FROM activity_logs
+             ORDER BY created_at DESC LIMIT 10"
+        );
+        $stmt->execute();
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $activity = array_map(fn($r) => [
+            'id'     => $r['id'],
+            'action' => $r['action'],
+            'actor'  => $r['actor'],
+            'target' => $r['target'],
+            'detail' => $r['detail'] ?? '',
+            'text'   => $r['target'] . ' — ' . $r['detail'],
+            'time'   => $r['created_at'],
+            'status' => 'approved',
+        ], $rows);
+
+        jsonResponse($activity);
+    }
+
+    public function health($params = []) {
+        jsonResponse([
+            ['label' => 'Listings approved within 24h', 'pct' => 82],
+            ['label' => 'Agent verifications complete',  'pct' => 91],
+            ['label' => 'Reports resolved < 48h',        'pct' => 74],
+            ['label' => 'Active listings vs total',      'pct' => 88],
+        ]);
     }
 
     private function timeAgo($timestamp) {

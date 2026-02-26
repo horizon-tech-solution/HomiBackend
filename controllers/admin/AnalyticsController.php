@@ -6,94 +6,193 @@ class AnalyticsController {
         $this->db = $db;
     }
 
-    public function setAdmin($admin) {
-        // not needed for analytics
+    public function setAdmin($admin) {}
+
+    public function growth($params = []) {
+        $range = $_GET['range'] ?? 'last_6_months';
+        $months = match($range) {
+            'last_30_days'  => 1,
+            'last_3_months' => 3,
+            'all_time'      => 24,
+            default         => 6,
+        };
+
+        $stmt = $this->db->prepare("
+            SELECT DATE_FORMAT(m.month, '%b %Y') AS month,
+                (SELECT COUNT(*) FROM users     WHERE created_at <= LAST_DAY(m.month)) AS users,
+                (SELECT COUNT(*) FROM users     WHERE role = 'agent' AND verification_status = 'verified' AND created_at <= LAST_DAY(m.month)) AS agents,
+                (SELECT COUNT(*) FROM listings  WHERE status = 'approved' AND approved_at <= LAST_DAY(m.month)) AS listings,
+                (SELECT COUNT(*) FROM inquiries WHERE created_at BETWEEN DATE_FORMAT(m.month, '%Y-%m-01') AND LAST_DAY(m.month)) AS inquiries
+            FROM (
+                SELECT DATE_FORMAT(DATE_SUB(NOW(), INTERVAL n MONTH), '%Y-%m-01') AS month
+                FROM (
+                    SELECT 0 n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3
+                    UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7
+                    UNION SELECT 8 UNION SELECT 9 UNION SELECT 10 UNION SELECT 11
+                    UNION SELECT 12 UNION SELECT 13 UNION SELECT 14 UNION SELECT 15
+                    UNION SELECT 16 UNION SELECT 17 UNION SELECT 18 UNION SELECT 19
+                    UNION SELECT 20 UNION SELECT 21 UNION SELECT 22 UNION SELECT 23
+                ) nums
+                WHERE n < :months
+            ) m
+            ORDER BY m.month ASC
+        ");
+        $stmt->execute([':months' => $months]);
+        jsonResponse($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
-    public function index() {
-        // Fetch growth data, city data, etc. from database
-        $growth = $this->getGrowthData();
-        $cityData = $this->getCityData();
-        $typeData = $this->getTypeData();
-        $priceRent = $this->getPriceRent();
-        $moderation = $this->getModerationData();
-        $funnel = $this->getFunnelData();
-        $heatmap = $this->getHeatmap();
-        $topAgents = $this->getTopAgents();
+    public function cities($params = []) {
+        $stmt = $this->db->query("
+            SELECT l.city,
+                COUNT(*) AS listings,
+                COUNT(DISTINCT i.id) AS inquiries
+            FROM listings l
+            LEFT JOIN inquiries i ON i.listing_id = l.id
+            WHERE l.status = 'approved'
+            GROUP BY l.city
+            ORDER BY listings DESC
+            LIMIT 8
+        ");
+        jsonResponse($stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    public function propertyTypes($params = []) {
+        $colors = [
+            'apartment'  => '#18181b',
+            'house'      => '#3f3f46',
+            'villa'      => '#71717a',
+            'commercial' => '#a1a1aa',
+            'land'       => '#d4d4d8',
+            'duplex'     => '#e4e4e7',
+            'other'      => '#f4f4f5',
+        ];
+        $stmt = $this->db->query("
+            SELECT property_type AS name, COUNT(*) AS value
+            FROM listings
+            GROUP BY property_type
+            ORDER BY value DESC
+        ");
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rows = array_map(fn($r) => [
+            'name'  => ucfirst($r['name']),
+            'value' => (int) $r['value'],
+            'color' => $colors[$r['name']] ?? '#e4e4e7',
+        ], $rows);
+        jsonResponse($rows);
+    }
+
+    public function priceDistribution($params = []) {
+        $stmt = $this->db->query("
+            SELECT
+                SUM(price < 50000)                          AS `< 50k`,
+                SUM(price BETWEEN 50000  AND 100000)        AS `50–100k`,
+                SUM(price BETWEEN 100001 AND 200000)        AS `100–200k`,
+                SUM(price BETWEEN 200001 AND 500000)        AS `200–500k`,
+                SUM(price BETWEEN 500001 AND 1000000)       AS `500k–1M`,
+                SUM(price > 1000000)                        AS `> 1M`
+            FROM listings
+            WHERE transaction_type = 'rent' AND status = 'approved'
+        ");
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $result = [];
+        foreach ($row as $range => $count) {
+            $result[] = ['range' => $range, 'count' => (int) $count];
+        }
+        jsonResponse($result);
+    }
+
+    public function moderation($params = []) {
+        $stmt = $this->db->query("
+            SELECT DATE_FORMAT(submitted_at, '%b') AS month,
+                SUM(status = 'approved')                    AS approved,
+                SUM(status = 'rejected')                    AS rejected,
+                SUM(fraud_signals IS NOT NULL
+                    AND JSON_LENGTH(fraud_signals) > 0)     AS flagged
+            FROM listings
+            WHERE submitted_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+            GROUP BY YEAR(submitted_at), MONTH(submitted_at)
+            ORDER BY submitted_at ASC
+        ");
+        jsonResponse($stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    public function funnel($params = []) {
+        $submitted = (int) $this->db->query("SELECT COUNT(*) FROM listings")->fetchColumn();
+        $approved  = (int) $this->db->query("SELECT COUNT(*) FROM listings WHERE status = 'approved'")->fetchColumn();
+        $inquired  = (int) $this->db->query("SELECT COUNT(DISTINCT listing_id) FROM inquiries")->fetchColumn();
+        $favorited = (int) $this->db->query("SELECT COUNT(DISTINCT listing_id) FROM favorites")->fetchColumn();
+
+        $pct = fn($n) => $submitted > 0 ? round($n / $submitted * 100) : 0;
 
         jsonResponse([
-            'growth' => $growth,
-            'city' => $cityData,
-            'types' => $typeData,
-            'price_rent' => $priceRent,
-            'moderation' => $moderation,
-            'funnel' => $funnel,
-            'heatmap' => $heatmap,
-            'top_agents' => $topAgents
+            ['stage' => 'Submitted', 'value' => $submitted, 'pct' => 100],
+            ['stage' => 'Approved',  'value' => $approved,  'pct' => $pct($approved)],
+            ['stage' => 'Favorited', 'value' => $favorited, 'pct' => $pct($favorited)],
+            ['stage' => 'Inquired',  'value' => $inquired,  'pct' => $pct($inquired)],
         ]);
     }
 
-    private function getGrowthData() {
-        // Example: group by month
+    public function heatmap($params = []) {
+        // Returns 4 weeks x 7 days of activity counts
+        $result = [];
+        for ($week = 3; $week >= 0; $week--) {
+            $days = [];
+            for ($day = 0; $day < 7; $day++) {
+                $offset = $week * 7 + (6 - $day);
+                $stmt = $this->db->prepare("
+                    SELECT COUNT(*) FROM activity_logs
+                    WHERE DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL :offset DAY)
+                ");
+                $stmt->execute([':offset' => $offset]);
+                $days[] = (int) $stmt->fetchColumn();
+            }
+            $result[] = $days;
+        }
+        jsonResponse($result);
+    }
+
+    public function topAgents($params = []) {
         $stmt = $this->db->query("
-            SELECT DATE_FORMAT(created_at, '%b') as month,
-                   COUNT(*) as users,
-                   SUM(CASE WHEN role='agent' THEN 1 ELSE 0 END) as agents,
-                   (SELECT COUNT(*) FROM listings WHERE status='approved') as listings,
-                   (SELECT COUNT(*) FROM inquiries) as inquiries
-            FROM users
-            GROUP BY MONTH(created_at)
-            ORDER BY created_at ASC
+            SELECT u.name,
+                COALESCE(u.agency_name, 'Independent') AS agency,
+                u.listings_count AS listings,
+                COUNT(DISTINCT i.id) AS inquiries,
+                ROUND(COALESCE(AVG(r.rating), 0), 1) AS rating
+            FROM users u
+            LEFT JOIN listings  l ON l.user_id = u.id AND l.status = 'approved'
+            LEFT JOIN inquiries i ON i.listing_id = l.id
+            LEFT JOIN reviews   r ON r.agent_id = u.id
+            WHERE u.role = 'agent' AND u.verification_status = 'verified'
+            GROUP BY u.id
+            ORDER BY u.listings_count DESC
             LIMIT 8
         ");
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rows = array_map(fn($r) => [
+            'name'      => $r['name'],
+            'agency'    => $r['agency'],
+            'listings'  => (int)   $r['listings'],
+            'inquiries' => (int)   $r['inquiries'],
+            'rating'    => $r['rating'] > 0 ? (float) $r['rating'] : '—',
+        ], $rows);
+        jsonResponse($rows);
     }
 
-    private function getCityData() {
-        $stmt = $this->db->query("SELECT city, COUNT(*) as listings, (SELECT COUNT(*) FROM inquiries i JOIN listings l ON i.listing_id = l.id WHERE l.city = listings.city) as inquiries FROM listings GROUP BY city");
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
+    public function export($params = []) {
+        $range = $_GET['range'] ?? 'last_6_months';
+        // Reuse growth data for export
+        ob_start();
+        $this->growth();
+        $data = json_decode(ob_get_clean(), true);
 
-    private function getTypeData() {
-        $stmt = $this->db->query("SELECT property_type as name, COUNT(*) as value FROM listings GROUP BY property_type");
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    private function getPriceRent() {
-        // custom ranges
-        return [
-            ['range' => '< 50k', 'count' => 184],
-            ['range' => '50–100k', 'count' => 298],
-            // ...
-        ];
-    }
-
-    private function getModerationData() {
-        $stmt = $this->db->query("SELECT DATE_FORMAT(submitted_at, '%b') as month, COUNT(*) as total, SUM(CASE WHEN status='approved' THEN 1 ELSE 0 END) as approved, SUM(CASE WHEN status='rejected' THEN 1 ELSE 0 END) as rejected, SUM(CASE WHEN fraud_signals IS NOT NULL THEN 1 ELSE 0 END) as flagged FROM listings GROUP BY MONTH(submitted_at)");
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    private function getFunnelData() {
-        // This would need real data
-        return [
-            ['stage' => 'Submitted', 'value' => 1390, 'pct' => 100],
-            ['stage' => 'Approved', 'value' => 1284, 'pct' => 92],
-            // ...
-        ];
-    }
-
-    private function getHeatmap() {
-        // dummy data
-        return [
-            [12, 38, 45, 52, 61, 28, 15],
-            [18, 42, 58, 71, 68, 31, 19],
-            [22, 51, 72, 84, 79, 36, 21],
-            [28, 63, 89, 102, 94, 44, 27],
-        ];
-    }
-
-    private function getTopAgents() {
-        $stmt = $this->db->query("SELECT u.name, u.agency_name as agency, u.listings_count as listings, (SELECT COUNT(*) FROM inquiries i JOIN listings l ON i.listing_id = l.id WHERE l.user_id = u.id) as inquiries, (SELECT AVG(rating) FROM reviews WHERE agent_id = u.id) as rating FROM users u WHERE role='agent' AND verification_status='verified' ORDER BY listings_count DESC LIMIT 5");
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        header('Content-Type: text/csv');
+        header('Content-Disposition: attachment; filename="analytics-' . date('Y-m-d') . '.csv"');
+        $out = fopen('php://output', 'w');
+        fputcsv($out, ['Month', 'Users', 'Agents', 'Listings', 'Inquiries']);
+        foreach ($data as $row) {
+            fputcsv($out, [$row['month'], $row['users'], $row['agents'], $row['listings'], $row['inquiries']]);
+        }
+        fclose($out);
+        exit;
     }
 }

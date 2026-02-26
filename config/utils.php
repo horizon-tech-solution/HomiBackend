@@ -7,7 +7,10 @@ function jsonResponse($data, $status = 200) {
 }
 
 function getJsonInput() {
-    $input = json_decode(file_get_contents('php://input'), true);
+    $raw = file_get_contents('php://input');
+    if (empty($raw)) return [];  // empty body is fine
+    
+    $input = json_decode($raw, true);
     if (json_last_error() !== JSON_ERROR_NONE) {
         jsonResponse(['error' => 'Invalid JSON'], 400);
     }

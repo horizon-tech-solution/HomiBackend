@@ -60,4 +60,40 @@ class ReportController {
             jsonResponse(['error' => 'Dismissal failed'], 500);
         }
     }
+    public function blockSubject($params) {
+    $id = $params['id'] ?? null;
+    if (!$id) jsonResponse(['error' => 'ID required'], 400);
+
+    if ($this->reportModel->blockSubject($id)) {
+        $this->logModel->create('subject_blocked', $this->admin['name'], "Report #$id", '', 'report');
+        jsonResponse(['success' => true]);
+    } else {
+        jsonResponse(['error' => 'Block failed'], 500);
+    }
+}
+
+    public function deleteListing($params) {
+        $id = $params['id'] ?? null;
+        if (!$id) jsonResponse(['error' => 'ID required'], 400);
+
+        if ($this->reportModel->deleteListing($id)) {
+            $this->logModel->create('listing_deleted_via_report', $this->admin['name'], "Report #$id", '', 'report');
+            jsonResponse(['success' => true]);
+        } else {
+            jsonResponse(['error' => 'Delete failed'], 500);
+        }
+    }
+
+    public function saveNotes($params) {
+        $id = $params['id'] ?? null;
+        if (!$id) jsonResponse(['error' => 'ID required'], 400);
+        $input = getJsonInput();
+        $notes = $input['notes'] ?? '';
+
+        if ($this->reportModel->saveNotes($id, $notes)) {
+            jsonResponse(['success' => true]);
+        } else {
+            jsonResponse(['error' => 'Failed to save notes'], 500);
+        }
+    }
 }
