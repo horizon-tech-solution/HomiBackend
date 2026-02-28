@@ -1,0 +1,170 @@
+<?php
+
+// ── CORS ──────────────────────────────────────────────────────────────────────
+header('Access-Control-Allow-Origin: http://localhost:5173');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Credentials: true');
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
+    exit;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ✅ Define request method for router
+$requestMethod = $_SERVER['REQUEST_METHOD'];
+
+require_once __DIR__ . '/vendor/autoload.php';
+
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+use Dotenv\Dotenv;
+
+// Load environment variables (optional – uncomment if you have a .env file)
+// $dotenv = Dotenv::createImmutable(__DIR__);
+// $dotenv->safeLoad();
+
+require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/config/auth.php';
+require_once __DIR__ . '/config/user_auth.php';
+require_once __DIR__ . '/config/utils.php';
+require_once __DIR__ . '/middleware/AuthMiddleware.php';
+require_once __DIR__ . '/middleware/UserAuthMiddleware.php';
+
+// ── Determine base path dynamically ──────────────────────────────────────────
+$scriptDir = dirname($_SERVER['SCRIPT_NAME']); // e.g., '/HomiBackend-main'
+if ($scriptDir === '/' || $scriptDir === '\\') {
+    $scriptDir = '';
+}
+$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+if (str_starts_with($requestUri, $scriptDir)) {
+    $uri = substr($requestUri, strlen($scriptDir));
+} else {
+    $uri = $requestUri;
+}
+$uri = trim($uri, '/');
+$uriParts = $uri === '' ? [] : explode('/', $uri);
+
+// ── Load routes ──────────────────────────────────────────────────────────────
+$routes = require __DIR__ . '/routes.php';
+
+$matchedRoute = null;
+$params = [];
+
+foreach ($routes as $route) {
+    if ($route['method'] !== $requestMethod) continue;
+
+    $routePath = trim($route['path'], '/');
+    $routeParts = explode('/', $routePath);
+
+    if (count($routeParts) !== count($uriParts)) continue;
+
+    $match = true;
+    $tempParams = [];
+
+    for ($i = 0; $i < count($routeParts); $i++) {
+        if (str_starts_with($routeParts[$i], '{') && str_ends_with($routeParts[$i], '}')) {
+            $paramName = trim($routeParts[$i], '{}');
+            $tempParams[$paramName] = $uriParts[$i];
+        } elseif ($routeParts[$i] !== $uriParts[$i]) {
+            $match = false;
+            break;
+        }
+    }
+
+    if ($match) {
+        $matchedRoute = $route;
+        $params = $tempParams;
+        break;
+    }
+}
+
+if (!$matchedRoute) {
+    http_response_code(404);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'error'     => 'Route not found',
+        'method'    => $requestMethod,
+        'uri'       => $uri,
+        'uri_parts' => $uriParts,
+        'raw'       => $requestUri,
+    ]);
+    exit;
+}
+
+// ── Determine controller and method ──────────────────────────────────────────
+$handler = $matchedRoute['handler'];
+[$controllerName, $method] = explode('@', $handler);
+
+// Controllers are in subdirectories: admin/ or agent/
+if (str_contains($controllerName, '\\')) {
+    // Already namespaced, e.g., 'Agent\AuthController'
+    $controllerPath = str_replace('\\', '/', $controllerName);
+    $controllerFile = __DIR__ . '/controllers/' . $controllerPath . '.php';
+} else {
+    // Assume admin controller (backward compatibility)
+    $controllerFile = __DIR__ . '/controllers/admin/' . $controllerName . '.php';
+}
+
+if (!file_exists($controllerFile)) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Controller file not found: ' . $controllerName]);
+    exit;
+}
+
+require_once $controllerFile;
+
+if (!class_exists($controllerName)) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Controller class not found: ' . $controllerName]);
+    exit;
+}
+
+// ── Database connection ──────────────────────────────────────────────────────
+$db = (new Database())->getConnection();
+$controller = new $controllerName($db);
+
+// ── Authentication middleware ────────────────────────────────────────────────
+$authUser = null;
+if ($matchedRoute['auth'] ?? false) {
+    if ($matchedRoute['auth'] === 'admin') {
+        $authMiddleware = new AuthMiddleware();
+        $authUser = $authMiddleware->authenticate();
+        $authType = 'admin';
+    } elseif ($matchedRoute['auth'] === 'user') {
+        $authMiddleware = new UserAuthMiddleware();
+        $authUser = $authMiddleware->authenticate();
+        $authType = 'user';
+    } else {
+        $authUser = null;
+    }
+
+    if (!$authUser) {
+        http_response_code(401);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Unauthorized']);
+        exit;
+    }
+
+    // Pass authenticated user to controller
+    if ($authType === 'admin' && method_exists($controller, 'setAdmin')) {
+        $controller->setAdmin($authUser);
+    } elseif ($authType === 'user' && method_exists($controller, 'setUser')) {
+        $controller->setUser($authUser);
+    }
+}
+
+// ── Execute the controller method ────────────────────────────────────────────
+try {
+    header('Content-Type: application/json');
+    $response = $controller->$method($params);
+    if ($response !== null) {
+        echo json_encode($response);
+    }
+} catch (Exception $e) {
+    http_response_code(500);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => $e->getMessage()]);
+}
