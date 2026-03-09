@@ -3,13 +3,14 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Feb 23, 2026 at 10:37 PM
+-- Generation Time: Feb 28, 2026 at 12:03 PM
 -- Server version: 8.0.27
 -- PHP Version: 8.2.12
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
+
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -34,7 +35,7 @@ CREATE TABLE `activity_logs` (
   `detail` text,
   `category` enum('listing','agent','user','report','settings') NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -51,7 +52,7 @@ CREATE TABLE `admin_users` (
   `role` enum('admin','superadmin') DEFAULT 'admin',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `admin_users`
@@ -59,6 +60,20 @@ CREATE TABLE `admin_users` (
 
 INSERT INTO `admin_users` (`id`, `username`, `password_hash`, `name`, `email`, `role`, `created_at`, `updated_at`) VALUES
 (1, 'admin', '$2y$10$kiSXfGksWNlJX.5Q6DfrOe7SGaPLvcVpZeEYrsp9I.qoYBzcwA0Zq', 'Admin', 'admin@propty.cm', 'superadmin', '2026-02-21 13:17:07', '2026-02-21 15:17:18');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `application_documents`
+--
+
+CREATE TABLE `application_documents` (
+  `id` int NOT NULL,
+  `application_id` int NOT NULL,
+  `document_type` enum('id','land_title','license','business_reg') NOT NULL,
+  `file_path` varchar(255) NOT NULL,
+  `uploaded_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -75,7 +90,7 @@ CREATE TABLE `documents` (
   `file_path` varchar(255) NOT NULL,
   `status` enum('pending','verified','flagged') DEFAULT 'pending',
   `uploaded_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -87,7 +102,7 @@ CREATE TABLE `favorites` (
   `user_id` int NOT NULL,
   `listing_id` int NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -102,7 +117,7 @@ CREATE TABLE `inquiries` (
   `to_user_id` int NOT NULL,
   `message` text NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -138,7 +153,7 @@ CREATE TABLE `listings` (
   `admin_notes` text,
   `fraud_signals` json DEFAULT NULL,
   `requested_changes` text
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -152,7 +167,65 @@ CREATE TABLE `listing_photos` (
   `photo_url` varchar(255) NOT NULL,
   `is_cover` tinyint(1) DEFAULT '0',
   `sort_order` tinyint UNSIGNED DEFAULT '0'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `messages`
+--
+
+CREATE TABLE `messages` (
+  `id` int NOT NULL,
+  `inquiry_id` int NOT NULL,
+  `sender_id` int NOT NULL,
+  `sender_type` enum('user','agent') NOT NULL,
+  `message` text NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `notifications`
+--
+
+CREATE TABLE `notifications` (
+  `id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `type` enum('lead','message','viewing','offer','property','system','success','analytics') NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `message` text NOT NULL,
+  `data` json DEFAULT NULL,
+  `read_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `professional_applications`
+--
+
+CREATE TABLE `professional_applications` (
+  `id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `professional_type` enum('landlord','agent','landSeller') NOT NULL,
+  `business_name` varchar(255) NOT NULL,
+  `tax_id` varchar(50) NOT NULL,
+  `license_number` varchar(100) DEFAULT NULL,
+  `years_experience` varchar(20) DEFAULT NULL,
+  `office_address` text NOT NULL,
+  `phone_number` varchar(20) NOT NULL,
+  `region` varchar(100) DEFAULT NULL,
+  `city` varchar(100) DEFAULT NULL,
+  `notary_name` varchar(255) DEFAULT NULL,
+  `notary_contact` varchar(20) DEFAULT NULL,
+  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `admin_notes` text,
+  `submitted_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `reviewed_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -176,7 +249,7 @@ CREATE TABLE `reports` (
   `resolved_at` timestamp NULL DEFAULT NULL,
   `resolution` text,
   `admin_notes` text
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -191,7 +264,23 @@ CREATE TABLE `reviews` (
   `rating` tinyint UNSIGNED NOT NULL,
   `comment` text,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `saved_searches`
+--
+
+CREATE TABLE `saved_searches` (
+  `id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `criteria` json NOT NULL,
+  `new_results_count` int DEFAULT '0',
+  `last_checked` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
 
@@ -206,7 +295,7 @@ CREATE TABLE `settings` (
   `type` enum('boolean','number','string','json') DEFAULT 'string',
   `description` text,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `settings`
@@ -273,9 +362,20 @@ CREATE TABLE `users` (
   `blocked_at` timestamp NULL DEFAULT NULL,
   `block_reason` text,
   `last_active` timestamp NULL DEFAULT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- --------------------------------------------------------
+
+--
+-- Table structure for table `view_history`
+--
+
+CREATE TABLE `view_history` (
+  `id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `listing_id` int NOT NULL,
+  `viewed_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Indexes for dumped tables
@@ -296,6 +396,13 @@ ALTER TABLE `admin_users`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `username` (`username`),
   ADD UNIQUE KEY `email` (`email`);
+
+--
+-- Indexes for table `application_documents`
+--
+ALTER TABLE `application_documents`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_application` (`application_id`);
 
 --
 -- Indexes for table `documents`
@@ -338,6 +445,30 @@ ALTER TABLE `listing_photos`
   ADD KEY `idx_listing` (`listing_id`);
 
 --
+-- Indexes for table `messages`
+--
+ALTER TABLE `messages`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_inquiry` (`inquiry_id`),
+  ADD KEY `sender_id` (`sender_id`);
+
+--
+-- Indexes for table `notifications`
+--
+ALTER TABLE `notifications`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_user` (`user_id`),
+  ADD KEY `idx_read` (`read_at`);
+
+--
+-- Indexes for table `professional_applications`
+--
+ALTER TABLE `professional_applications`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_user` (`user_id`),
+  ADD KEY `idx_status` (`status`);
+
+--
 -- Indexes for table `reports`
 --
 ALTER TABLE `reports`
@@ -357,6 +488,13 @@ ALTER TABLE `reviews`
   ADD KEY `fk_rev_reviewer` (`reviewer_id`);
 
 --
+-- Indexes for table `saved_searches`
+--
+ALTER TABLE `saved_searches`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_user` (`user_id`);
+
+--
 -- Indexes for table `settings`
 --
 ALTER TABLE `settings`
@@ -373,75 +511,203 @@ ALTER TABLE `users`
   ADD KEY `idx_status` (`status`),
   ADD KEY `idx_verification` (`verification_status`);
 
--- --------------------------------------------------------
+--
+-- Indexes for table `view_history`
+--
+ALTER TABLE `view_history`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_user` (`user_id`),
+  ADD KEY `idx_listing` (`listing_id`);
 
 --
 -- AUTO_INCREMENT for dumped tables
 --
 
+--
+-- AUTO_INCREMENT for table `activity_logs`
+--
 ALTER TABLE `activity_logs`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
+--
+-- AUTO_INCREMENT for table `admin_users`
+--
 ALTER TABLE `admin_users`
   MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
+--
+-- AUTO_INCREMENT for table `application_documents`
+--
+ALTER TABLE `application_documents`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `documents`
+--
 ALTER TABLE `documents`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
+--
+-- AUTO_INCREMENT for table `inquiries`
+--
 ALTER TABLE `inquiries`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
+--
+-- AUTO_INCREMENT for table `listings`
+--
 ALTER TABLE `listings`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
+--
+-- AUTO_INCREMENT for table `listing_photos`
+--
 ALTER TABLE `listing_photos`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
+--
+-- AUTO_INCREMENT for table `messages`
+--
+ALTER TABLE `messages`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `notifications`
+--
+ALTER TABLE `notifications`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `professional_applications`
+--
+ALTER TABLE `professional_applications`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `reports`
+--
 ALTER TABLE `reports`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
+--
+-- AUTO_INCREMENT for table `reviews`
+--
 ALTER TABLE `reviews`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
+--
+-- AUTO_INCREMENT for table `saved_searches`
+--
+ALTER TABLE `saved_searches`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `settings`
+--
 ALTER TABLE `settings`
   MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
 
+--
+-- AUTO_INCREMENT for table `users`
+--
 ALTER TABLE `users`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
--- --------------------------------------------------------
+--
+-- AUTO_INCREMENT for table `view_history`
+--
+ALTER TABLE `view_history`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
 -- Constraints for dumped tables
 --
 
+--
+-- Constraints for table `application_documents`
+--
+ALTER TABLE `application_documents`
+  ADD CONSTRAINT `application_documents_ibfk_1` FOREIGN KEY (`application_id`) REFERENCES `professional_applications` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `documents`
+--
 ALTER TABLE `documents`
   ADD CONSTRAINT `fk_doc_listing` FOREIGN KEY (`listing_id`) REFERENCES `listings` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_doc_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
+--
+-- Constraints for table `favorites`
+--
 ALTER TABLE `favorites`
   ADD CONSTRAINT `fk_fav_listing` FOREIGN KEY (`listing_id`) REFERENCES `listings` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_fav_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
+--
+-- Constraints for table `inquiries`
+--
 ALTER TABLE `inquiries`
   ADD CONSTRAINT `fk_inq_from` FOREIGN KEY (`from_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_inq_listing` FOREIGN KEY (`listing_id`) REFERENCES `listings` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_inq_to` FOREIGN KEY (`to_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
+--
+-- Constraints for table `listings`
+--
 ALTER TABLE `listings`
   ADD CONSTRAINT `fk_listing_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
+--
+-- Constraints for table `listing_photos`
+--
 ALTER TABLE `listing_photos`
   ADD CONSTRAINT `fk_photo_listing` FOREIGN KEY (`listing_id`) REFERENCES `listings` (`id`) ON DELETE CASCADE;
 
+--
+-- Constraints for table `messages`
+--
+ALTER TABLE `messages`
+  ADD CONSTRAINT `messages_ibfk_1` FOREIGN KEY (`inquiry_id`) REFERENCES `inquiries` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `messages_ibfk_2` FOREIGN KEY (`sender_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `notifications`
+--
+ALTER TABLE `notifications`
+  ADD CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `professional_applications`
+--
+ALTER TABLE `professional_applications`
+  ADD CONSTRAINT `professional_applications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `reports`
+--
 ALTER TABLE `reports`
   ADD CONSTRAINT `fk_report_linked_listing` FOREIGN KEY (`linked_listing_id`) REFERENCES `listings` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `fk_report_user` FOREIGN KEY (`reported_by_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
+--
+-- Constraints for table `reviews`
+--
 ALTER TABLE `reviews`
   ADD CONSTRAINT `fk_rev_agent` FOREIGN KEY (`agent_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_rev_reviewer` FOREIGN KEY (`reviewer_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
+--
+-- Constraints for table `saved_searches`
+--
+ALTER TABLE `saved_searches`
+  ADD CONSTRAINT `saved_searches_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `view_history`
+--
+ALTER TABLE `view_history`
+  ADD CONSTRAINT `view_history_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `view_history_ibfk_2` FOREIGN KEY (`listing_id`) REFERENCES `listings` (`id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

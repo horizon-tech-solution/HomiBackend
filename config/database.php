@@ -1,31 +1,42 @@
 <?php
+
 class Database {
-    private $host;
-    private $dbname;
-    private $user;
-    private $pass;
-    private $pdo;
+    private string $host;
+    private string $dbname;
+    private string $user;
+    private string $pass;
+    private string $port;
+    private ?PDO $pdo = null;
 
     public function __construct() {
-        $this->host = $_ENV['DB_HOST'] ?? 'localhost';
+        $this->host   = $_ENV['DB_HOST'] ?? 'localhost';
+        $this->port   = $_ENV['DB_PORT'] ?? '3306';
         $this->dbname = $_ENV['DB_NAME'] ?? 'homi';
-        $this->user = $_ENV['DB_USER'] ?? 'root';
-        $this->pass = $_ENV['DB_PASS'] ?? 'root';
+        $this->user   = $_ENV['DB_USER'] ?? 'root';
+        $this->pass   = $_ENV['DB_PASS'] ?? '';
     }
 
-    public function getConnection() {
-        $this->pdo = null;
-        try {
-            $this->pdo = new PDO(
-                "mysql:host={$this->host};dbname={$this->dbname};charset=utf8mb4",
-                $this->user,
-                $this->pass
-            );
-            $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        } catch(PDOException $e) {
-            die("Connection failed: " . $e->getMessage());
+    public function getConnection(): PDO {
+        if ($this->pdo !== null) {
+            return $this->pdo;
         }
+
+        try {
+            $dsn = "mysql:host={$this->host};port={$this->port};dbname={$this->dbname};charset=utf8mb4";
+
+            $this->pdo = new PDO($dsn, $this->user, $this->pass, [
+                PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES   => false,
+                Pdo\Mysql::ATTR_FOUND_ROWS   => true,  // fixed: was PDO::MYSQL_ATTR_FOUND_ROWS
+            ]);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Database connection failed']);
+            exit;
+        }
+
         return $this->pdo;
     }
 }
-?>
