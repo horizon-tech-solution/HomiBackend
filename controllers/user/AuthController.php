@@ -1,4 +1,5 @@
 <?php
+// controllers/user/AuthController.php
 require_once __DIR__ . '/../../config/user_auth.php';
 
 class AuthController {
@@ -8,7 +9,7 @@ class AuthController {
         $this->db = $db;
     }
 
-    public function setUser($user) {} // not needed for auth endpoints
+    public function setUser($user) {}
 
     // ── POST /user/auth/register ──────────────────────────────────────────────
     public function register() {
@@ -42,14 +43,18 @@ class AuthController {
         if ($stmt->execute([$name, $email, $phone, $hash])) {
             $userId = $this->db->lastInsertId();
             $token  = UserAuth::generateToken($userId, $email, 'user');
+
+            setAuthCookie($token);
+
             jsonResponse([
                 'token' => $token,
                 'user'  => [
-                    'id'    => (int) $userId,
-                    'name'  => $name,
-                    'email' => $email,
-                    'phone' => $phone,
-                    'role'  => 'user',
+                    'id'         => (int) $userId,
+                    'name'       => $name,
+                    'email'      => $email,
+                    'phone'      => $phone,
+                    'role'       => 'user',
+                    'avatar_url' => null,
                 ]
             ], 201);
         } else {
@@ -69,7 +74,7 @@ class AuthController {
         }
 
         $stmt = $this->db->prepare(
-            "SELECT id, name, email, phone, role, status, password_hash
+            "SELECT id, name, email, phone, role, status, password_hash, avatar_url
              FROM users WHERE email = ?"
         );
         $stmt->execute([$email]);
@@ -85,21 +90,34 @@ class AuthController {
 
         $token = UserAuth::generateToken($user['id'], $user['email'], $user['role']);
 
+        setAuthCookie($token);
+
+        // Normalise avatar URL
+        $avatarUrl = $user['avatar_url'] ?? null;
+        if ($avatarUrl && str_starts_with($avatarUrl, '/uploads/')) {
+            $avatarUrl = 'http://localhost:8000' . $avatarUrl;
+        }
+
         jsonResponse([
             'token' => $token,
             'user'  => [
-                'id'    => (int) $user['id'],
-                'name'  => $user['name'],
-                'email' => $user['email'],
-                'phone' => $user['phone'],
-                'role'  => $user['role'],
+                'id'         => (int) $user['id'],
+                'name'       => $user['name'],
+                'email'      => $user['email'],
+                'phone'      => $user['phone'],
+                'role'       => $user['role'],
+                'avatar_url' => $avatarUrl,
             ]
         ]);
     }
 
+    // ── POST /user/auth/logout ────────────────────────────────────────────────
+    public function logout() {
+        clearAuthCookie();
+        jsonResponse(['success' => true]);
+    }
+
     // ── POST /user/auth/check ─────────────────────────────────────────────────
-    // Checks if an email or phone already has an account.
-    // Called on the identifier step of Auth.jsx to decide login vs signup.
     public function check() {
         $input = getJsonInput();
         $email = trim($input['email'] ?? '');
@@ -164,18 +182,11 @@ class AuthController {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW())"
         );
         $appOk = $appStmt->execute([
-            $userId,
-            $input['professionalType'],
-            $input['businessName'],
-            $input['taxId'],
-            $input['licenseNumber']   ?? null,
-            $input['yearsExperience'] ?? null,
-            $input['officeAddress'],
-            $input['phoneNumber'],
-            $input['region'],
-            $input['city'],
-            $input['notaryName']    ?? null,
-            $input['notaryContact'] ?? null,
+            $userId, $input['professionalType'], $input['businessName'],
+            $input['taxId'], $input['licenseNumber'] ?? null,
+            $input['yearsExperience'] ?? null, $input['officeAddress'],
+            $input['phoneNumber'], $input['region'], $input['city'],
+            $input['notaryName'] ?? null, $input['notaryContact'] ?? null,
         ]);
 
         if (!$appOk) {
@@ -185,14 +196,17 @@ class AuthController {
 
         $token = UserAuth::generateToken($userId, $input['email'], 'agent');
 
+        setAuthCookie($token);
+
         jsonResponse([
-            'token'          => $token,
-            'user'           => [
-                'id'    => (int) $userId,
-                'name'  => $name,
-                'email' => $input['email'],
-                'phone' => $input['phoneNumber'],
-                'role'  => 'agent',
+            'token' => $token,
+            'user'  => [
+                'id'         => (int) $userId,
+                'name'       => $name,
+                'email'      => $input['email'],
+                'phone'      => $input['phoneNumber'],
+                'role'       => 'agent',
+                'avatar_url' => null,
             ],
             'application_id' => (int) $applicationId,
         ], 201);

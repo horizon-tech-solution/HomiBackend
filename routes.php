@@ -105,6 +105,7 @@ return [
     ['method' => 'POST', 'path' => 'user/auth/login',                 'handler' => 'User\AuthController@login',                'auth' => false],
     ['method' => 'POST', 'path' => 'user/auth/register/professional', 'handler' => 'User\AuthController@registerProfessional', 'auth' => false],
     ['method' => 'POST', 'path' => 'user/auth/check', 'handler' => 'User\AuthController@check', 'auth' => false],
+    ['method' => 'POST', 'path' => 'user/auth/reset-password', 'handler' => 'User\PasswordResetController@resetPassword', 'auth' => false],
     
     ['method' => 'GET', 'path' => 'user/dashboard', 'handler' => 'User\DashboardController@index', 'auth' => 'user'],
    
@@ -118,13 +119,17 @@ return [
 
     ['method' => 'GET',  'path' => 'user/history/browse',           'handler' => 'User\HistoryController@browse',     'auth' => 'user'],
     ['method' => 'POST', 'path' => 'user/history/view/{listingId}', 'handler' => 'User\HistoryController@recordView', 'auth' => 'user'],
-
+    ['method' => 'POST', 'path' => 'user/history/search', 'handler' => 'User\HistoryController@recordSearch', 'auth' => 'user'],
+    
     ['method' => 'GET',    'path' => 'user/notifications',             'handler' => 'User\NotificationController@index',       'auth' => 'user'],
     ['method' => 'PATCH',  'path' => 'user/notifications/{id}/read',   'handler' => 'User\NotificationController@markRead',    'auth' => 'user'],
     ['method' => 'POST',   'path' => 'user/notifications/read-all',    'handler' => 'User\NotificationController@markAllRead', 'auth' => 'user'],
     ['method' => 'DELETE', 'path' => 'user/notifications/{id}',        'handler' => 'User\NotificationController@destroy',     'auth' => 'user'],
     ['method' => 'DELETE', 'path' => 'user/notifications',             'handler' => 'User\NotificationController@destroyAll',  'auth' => 'user'],
-
+    // ── Reports & Reviews ─────────────────────────────────────────────────────────
+    ['method' => 'POST', 'path' => 'user/reports', 'handler' => 'User\ReportReviewController@storeReport', 'auth' => 'user'],
+    ['method' => 'POST', 'path' => 'user/reviews', 'handler' => 'User\ReportReviewController@storeReview', 'auth' => 'user'],
+    
     ['method' => 'POST',   'path' => 'user/settings/otp/send',       'handler' => 'User\UserSettingsController@sendOtp',                 'auth' => 'user'],
     ['method' => 'GET',    'path' => 'user/settings/profile',         'handler' => 'User\UserSettingsController@getProfile',              'auth' => 'user'],
     ['method' => 'PUT',    'path' => 'user/settings/profile',         'handler' => 'User\UserSettingsController@updateProfile',           'auth' => 'user'],
@@ -143,6 +148,11 @@ return [
     ['method' => 'POST',   'path' => 'user/listings/{id}/photos',    'handler' => 'User\ListingController@uploadPhotos',   'auth' => 'user'],
     ['method' => 'POST',   'path' => 'user/listings/{id}/documents', 'handler' => 'User\ListingController@uploadDocuments','auth' => 'user'],
 
+    ['method' => 'GET',  'path' => 'user/inquiries',              'handler' => 'User\InquiryController@index',    'auth' => 'user'],
+    ['method' => 'POST', 'path' => 'user/inquiries',              'handler' => 'User\InquiryController@store',    'auth' => 'user'],
+    ['method' => 'GET',  'path' => 'user/inquiries/{id}/messages','handler' => 'User\InquiryController@messages', 'auth' => 'user'],
+    ['method' => 'POST', 'path' => 'user/inquiries/{id}/reply',   'handler' => 'User\InquiryController@reply',    'auth' => 'user'],
+    
     ['method' => 'POST', 'path' => 'user/professional/apply',       'handler' => 'User\ProfessionalController@submit',         'auth' => 'user'],
     ['method' => 'POST', 'path' => 'user/professional/{id}/upload', 'handler' => 'User\ProfessionalController@uploadDocument', 'auth' => 'user'],
     ['method' => 'GET',  'path' => 'user/professional/status',      'handler' => 'User\ProfessionalController@index',          'auth' => 'user'],
@@ -157,5 +167,6 @@ return [
     ['method' => 'POST', 'path' => 'public/inquiries',       'handler' => 'Public\InquiryController@send',   'auth' => false],
     ['method' => 'GET',  'path' => 'public/cities',          'handler' => 'Public\CityController@index',     'auth' => false],
     ['method' => 'GET',  'path' => 'public/stats',           'handler' => 'Public\StatsController@index',    'auth' => false],
+    ['method' => 'GET', 'path' => 'public/agents/{id}/reviews', 'handler' => 'User\ReportReviewController@agentReviews', 'auth' => false],
     ['method' => 'GET',  'path' => 'public/featured',        'handler' => 'Public\StatsController@featured', 'auth' => false],
 ];

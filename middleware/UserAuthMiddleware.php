@@ -1,4 +1,5 @@
 <?php
+// middleware/UserAuthMiddleware.php
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/user_auth.php';
 
@@ -10,17 +11,29 @@ class UserAuthMiddleware {
     }
 
     public function authenticate(): ?array {
-        $headers     = getallheaders();
-        $authHeader  = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        // ── 1. Try httpOnly cookie first ──────────────────────────────────
+        $token = getTokenFromCookie();
 
-        if (!preg_match('/Bearer\s+(.+)$/i', $authHeader, $matches)) {
-            return null;
+        // ── 2. Fall back to Authorization header (transition period) ──────
+        if (!$token) {
+            $token = $this->getTokenFromHeader();
         }
 
-        $payload = UserAuth::validateToken($matches[1]);
+        if (!$token) return null;
 
-        if (!$payload || empty($payload['sub'])) {
-            return null;
+        $payload = UserAuth::validateToken($token);
+
+        if (!$payload || empty($payload['sub'])) return null;
+
+        // ── Role check: only allow 'user' role on user-only routes ────────
+        // Remove this block if agents should also access user routes
+        // (e.g. browsing properties, favorites — which they likely should)
+        // Keep it if you want strict separation.
+        // Current decision: allow both 'user' and 'agent' on user routes
+        // since agents are also users of the platform.
+        $role = $payload['role'] ?? '';
+        if (!in_array($role, ['user', 'agent'])) {
+            return null; // blocks admin tokens from user routes
         }
 
         $stmt = $this->db->prepare(
@@ -31,5 +44,20 @@ class UserAuthMiddleware {
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         return $user ?: null;
+    }
+
+    // Keep header fallback during transition period
+    private function getTokenFromHeader(): ?string {
+        $headers           = getallheaders();
+        $normalizedHeaders = array_change_key_case($headers, CASE_LOWER);
+        $authHeader        = $normalizedHeaders['authorization']
+            ?? $_SERVER['HTTP_AUTHORIZATION']
+            ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+            ?? '';
+
+        if (preg_match('/Bearer\s+(.+)$/i', $authHeader, $matches)) {
+            return $matches[1];
+        }
+        return null;
     }
 }

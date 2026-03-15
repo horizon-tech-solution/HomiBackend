@@ -18,7 +18,6 @@ class LeadController {
     public function index($params = []) {
         $model = new Lead($this->db);
         $leads = $model->getByAgent((int) $this->user['id']);
-        header('Content-Type: application/json');
         jsonResponse($leads);
     }
 
@@ -53,13 +52,14 @@ class LeadController {
             return;
         }
 
-        // Verify inquiry belongs to one of this agent's listings
+        // Allow reply if agent owns the listing (received) OR is the original sender (sent)
         $check = $this->db->prepare(
-            "SELECT i.id, i.from_user_id FROM inquiries i
+            "SELECT i.id, i.from_user_id, i.to_user_id FROM inquiries i
              JOIN listings l ON i.listing_id = l.id
-             WHERE i.id = ? AND l.user_id = ?"
+             WHERE i.id = ?
+               AND (l.user_id = ? OR i.from_user_id = ?)"
         );
-        $check->execute([$id, $this->user['id']]);
+        $check->execute([$id, $this->user['id'], $this->user['id']]);
         $inquiry = $check->fetch(PDO::FETCH_ASSOC);
 
         if (!$inquiry) {
@@ -68,17 +68,25 @@ class LeadController {
             return;
         }
 
-        $model     = new Lead($this->db);
-        $messageId = $model->reply((int) $id, (int) $this->user['id'], $message);
+        // ── Use the actual role of the sender, not a hardcoded string ────────
+        // This fixes messages showing on the wrong side in the conversation view.
+        $senderType = $this->user['role'] ?? 'user'; // 'agent' | 'user'
 
-        // Notify the user (non-fatal)
-        $this->notifyUser((int) $id, (int) $inquiry['from_user_id'], $message);
+        $model     = new Lead($this->db);
+        $messageId = $model->reply((int) $id, (int) $this->user['id'], $message, $senderType);
+
+        // Notify the other party
+        $notifyUserId = ((int)$inquiry['from_user_id'] === (int)$this->user['id'])
+            ? (int)$inquiry['to_user_id']
+            : (int)$inquiry['from_user_id'];
+
+        $this->notifyUser((int) $id, $notifyUserId, $message);
 
         http_response_code(201);
         jsonResponse([
             'id'          => $messageId,
             'text'        => $message,
-            'sender_type' => 'agent',
+            'sender_type' => $senderType,
             'created_at'  => date('Y-m-d H:i:s'),
         ]);
     }

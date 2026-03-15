@@ -8,6 +8,16 @@ header('Access-Control-Allow-Headers: Content-Type, Authorization');
 header('Access-Control-Allow-Credentials: true');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
+// ── Fix: PHP built-in server strips Authorization on multipart requests ────────
+// Patch $_SERVER early so every middleware can rely on HTTP_AUTHORIZATION.
+if (empty($_SERVER['HTTP_AUTHORIZATION'])) {
+    $allHeaders = getallheaders();
+    $authValue  = $allHeaders['Authorization'] ?? $allHeaders['authorization'] ?? '';
+    if ($authValue !== '') {
+        $_SERVER['HTTP_AUTHORIZATION'] = $authValue;
+    }
+}
+
 // ── Static file serving (PHP built-in server doesn't serve files automatically) ──
 // Serves /uploads/* and /public/* directly from the filesystem.
 $staticUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -153,18 +163,11 @@ if (!preg_match('/^[A-Za-z\\\\]+@[A-Za-z]+$/', $handler)) {
 [$controllerName, $method] = explode('@', $handler);
 
 if (str_contains($controllerName, '\\')) {
-    // e.g. "Agent\DashboardController" or "User\AuthController"
-    // Split into namespace parts and class name
-    $parts         = explode('\\', $controllerName);
-    $controllerClass = array_pop($parts); // e.g. "DashboardController"
-
-    // Lowercase each namespace segment for the folder path
-    // e.g. ["Agent"] -> ["agent"], ["User"] -> ["user"]
-    $namespacePath = implode('/', array_map('strtolower', $parts));
-
-    $controllerFile = __DIR__ . '/controllers/' . $namespacePath . '/' . $controllerClass . '.php';
+    $parts           = explode('\\', $controllerName);
+    $controllerClass = array_pop($parts);
+    $namespacePath   = implode('/', array_map('strtolower', $parts));
+    $controllerFile  = __DIR__ . '/controllers/' . $namespacePath . '/' . $controllerClass . '.php';
 } else {
-    // Admin controllers — no namespace, live in controllers/admin/
     $controllerFile  = __DIR__ . '/controllers/admin/' . $controllerName . '.php';
     $controllerClass = $controllerName;
 }

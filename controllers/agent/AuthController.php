@@ -9,9 +9,7 @@ class AuthController {
     public function __construct($db) { $this->db = $db; }
     public function setUser($user)   { $this->user = $user; }
 
-    // ─────────────────────────────────────────────────────────────────
-    // POST /agent/auth/login
-    // ─────────────────────────────────────────────────────────────────
+    // ── POST /agent/auth/login ────────────────────────────────────────────────
     public function login() {
         $input    = getJsonInput();
         $email    = trim($input['email']    ?? '');
@@ -34,9 +32,13 @@ class AuthController {
         }
 
         $token = UserAuth::generateToken($user['id'], $user['email'], 'agent');
+
+        // ── Set httpOnly cookie — token never touches JS ──────────────────
+        setAuthCookie($token);
+
+        // ── Return only user info, NOT the token ─────────────────────────
         jsonResponse([
-            'token' => $token,
-            'user'  => [
+            'user' => [
                 'id'                  => $user['id'],
                 'name'                => $user['name'],
                 'email'               => $user['email'],
@@ -48,24 +50,23 @@ class AuthController {
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // POST /agent/auth/register
-    // Simplified: name, email, phone, password, national_id
-    //             + optional: agency_name, agent_type
-    // ─────────────────────────────────────────────────────────────────
-    public function register() {
-        $input    = getJsonInput();
+    // ── POST /agent/auth/logout ───────────────────────────────────────────────
+    public function logout() {
+        clearAuthCookie();
+        jsonResponse(['success' => true]);
+    }
 
-        // Trim every string field so whitespace-only values are caught
-        $name       = trim($input['name']       ?? '');
-        $email      = trim($input['email']      ?? '');
-        $phone      = trim($input['phone']      ?? '');
-        $password   = trim($input['password']   ?? '');
+    // ── POST /agent/auth/register ─────────────────────────────────────────────
+    public function register() {
+        $input      = getJsonInput();
+        $name       = trim($input['name']        ?? '');
+        $email      = trim($input['email']       ?? '');
+        $phone      = trim($input['phone']       ?? '');
+        $password   = trim($input['password']    ?? '');
         $nationalId = trim($input['national_id'] ?? '');
         $agencyName = trim($input['agency_name'] ?? '');
-        $agentType  = trim($input['agent_type']  ?? 'agent');  // landlord | agent | landSeller
+        $agentType  = trim($input['agent_type']  ?? 'agent');
 
-        // ── validation ──────────────────────────────────────────────
         $missing = [];
         if (!$name)       $missing[] = 'name';
         if (!$email)      $missing[] = 'email';
@@ -76,47 +77,34 @@ class AuthController {
         if ($missing) {
             jsonResponse(['error' => 'Missing required fields: ' . implode(', ', $missing)], 400);
         }
-
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             jsonResponse(['error' => 'Invalid email address'], 400);
         }
-
         if (strlen($password) < 8) {
             jsonResponse(['error' => 'Password must be at least 8 characters'], 400);
         }
 
         $allowedTypes = ['agent', 'landlord', 'landSeller'];
-        if (!in_array($agentType, $allowedTypes)) {
-            $agentType = 'agent';
-        }
+        if (!in_array($agentType, $allowedTypes)) $agentType = 'agent';
 
-        // ── duplicate check ─────────────────────────────────────────
         $stmt = $this->db->prepare("SELECT id FROM users WHERE email = ?");
         $stmt->execute([$email]);
         if ($stmt->fetch()) {
             jsonResponse(['error' => 'This email is already registered'], 409);
         }
 
-        // ── insert ──────────────────────────────────────────────────
         $hash = password_hash($password, PASSWORD_DEFAULT);
-
         $stmt = $this->db->prepare("
             INSERT INTO users
               (name, email, phone, password_hash, role, agency_name,
                verification_status, status, created_at, updated_at)
-            VALUES
-              (?, ?, ?, ?, 'agent', ?,
-               'pending', 'active', NOW(), NOW())
+            VALUES (?, ?, ?, ?, 'agent', ?, 'pending', 'active', NOW(), NOW())
         ");
-
         if (!$stmt->execute([$name, $email, $phone, $hash, $agencyName ?: null])) {
             jsonResponse(['error' => 'Registration failed. Please try again.'], 500);
         }
-
         $userId = (int) $this->db->lastInsertId();
 
-        // Store national_id in a dedicated table (or as a user meta column if you add one).
-        // For now we insert into agent_identity table. If it doesn't exist yet, see migration below.
         try {
             $stmt = $this->db->prepare("
                 INSERT INTO agent_identity (user_id, national_id_number, agent_type, created_at)
@@ -124,15 +112,16 @@ class AuthController {
             ");
             $stmt->execute([$userId, $nationalId, $agentType]);
         } catch (Exception $e) {
-            // Non-fatal: table may not exist yet. Log and continue.
             error_log('agent_identity insert failed: ' . $e->getMessage());
         }
 
         $token = UserAuth::generateToken($userId, $email, 'agent');
 
+        // ── Set httpOnly cookie ───────────────────────────────────────────
+        setAuthCookie($token);
+
         jsonResponse([
-            'token' => $token,
-            'user'  => [
+            'user' => [
                 'id'                  => $userId,
                 'name'                => $name,
                 'email'               => $email,
@@ -143,23 +132,17 @@ class AuthController {
         ], 201);
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // POST /agent/auth/upload-id     (authenticated)
-    // Stores the national ID document for a newly registered agent.
-    // Called right after register() from the frontend.
-    // ─────────────────────────────────────────────────────────────────
+    // ── POST /agent/auth/upload-id  (authenticated) ───────────────────────────
     public function uploadId() {
         if (empty($_FILES['document'])) {
             jsonResponse(['error' => 'No file uploaded'], 400);
         }
 
         $file    = $_FILES['document'];
-        $type    = $_POST['type'] ?? 'national_id';   // national_id | selfie
+        $type    = $_POST['type'] ?? 'national_id';
         $allowed = ['national_id', 'selfie'];
 
-        if (!in_array($type, $allowed)) {
-            $type = 'national_id';
-        }
+        if (!in_array($type, $allowed)) $type = 'national_id';
 
         $allowedMimes = ['image/jpeg', 'image/png', 'application/pdf'];
         if (!in_array($file['type'], $allowedMimes)) {
@@ -184,14 +167,13 @@ class AuthController {
         $filePath     = '/uploads/identity/' . $userId . '/' . $filename;
         $nationalIdNo = trim($_POST['national_id_number'] ?? '');
 
-        // Upsert into agent_identity
         try {
             $stmt = $this->db->prepare("
                 INSERT INTO agent_identity (user_id, national_id_number, {$type}_path, created_at)
                 VALUES (?, ?, ?, NOW())
                 ON DUPLICATE KEY UPDATE
-                    {$type}_path        = VALUES({$type}_path),
-                    national_id_number  = IF(? != '', VALUES(national_id_number), national_id_number)
+                    {$type}_path       = VALUES({$type}_path),
+                    national_id_number = IF(? != '', VALUES(national_id_number), national_id_number)
             ");
             $stmt->execute([$userId, $nationalIdNo, $filePath, $nationalIdNo]);
         } catch (Exception $e) {
@@ -201,9 +183,7 @@ class AuthController {
         jsonResponse(['success' => true, 'path' => $filePath]);
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // POST /user/professional/apply   (full verification — separate flow)
-    // ─────────────────────────────────────────────────────────────────
+    // ── POST /user/professional/apply ─────────────────────────────────────────
     public function apply() {
         $input = getJsonInput();
 
@@ -255,9 +235,7 @@ class AuthController {
         jsonResponse(['id' => $applicationId, 'status' => 'pending'], 201);
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // POST /user/professional/{id}/upload
-    // ─────────────────────────────────────────────────────────────────
+    // ── POST /user/professional/{id}/upload ───────────────────────────────────
     public function uploadDocument($params) {
         $applicationId = $params['id'] ?? null;
         if (!$applicationId) jsonResponse(['error' => 'Application ID required'], 400);
@@ -301,12 +279,11 @@ class AuthController {
         jsonResponse(['path' => $filePath]);
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // GET /user/professional/status
-    // ─────────────────────────────────────────────────────────────────
+    // ── GET /user/professional/status ─────────────────────────────────────────
     public function applicationStatus() {
         $stmt = $this->db->prepare("
-            SELECT id, professional_type, business_name, status, submitted_at, reviewed_at, admin_notes
+            SELECT id, professional_type, business_name, status,
+                   submitted_at, reviewed_at, admin_notes
             FROM professional_applications
             WHERE user_id = ?
             ORDER BY submitted_at DESC

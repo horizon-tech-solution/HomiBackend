@@ -55,7 +55,6 @@ class PropertyController {
         $this->db = $db;
     }
 
-    // ── Parse "lat,lng" string ───────────────────────────────────────────────
     private function parseCoordinates(?string $raw): ?array {
         if (!$raw || trim($raw) === '') return null;
         $parts = array_map('trim', explode(',', $raw));
@@ -65,26 +64,21 @@ class PropertyController {
         return null;
     }
 
-    // ── Derive coords from city + address ────────────────────────────────────
     private function deriveCoords(string $city, string $address): array {
         $key  = strtolower(trim($city));
         $base = $this->cityCoords[$key] ?? ['lat' => 4.0511, 'lng' => 9.7679];
-
         $addrLower = strtolower($address);
         foreach ($this->neighbourhoodOffsets as $hood => $offset) {
             if (str_contains($addrLower, $hood)) {
                 return ['lat' => $base['lat'] + $offset[0], 'lng' => $base['lng'] + $offset[1]];
             }
         }
-
-        // Small jitter so markers don't stack
         return [
             'lat' => $base['lat'] + (mt_rand(-80, 80) / 10000),
             'lng' => $base['lng'] + (mt_rand(-80, 80) / 10000),
         ];
     }
 
-    // ── Fetch photos for listing IDs (MySQL 5.7 safe — no JSON_ARRAYAGG) ────
     private function fetchPhotos(array $ids): array {
         if (empty($ids)) return [];
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
@@ -96,19 +90,21 @@ class PropertyController {
         );
         $stmt->execute(array_values($ids));
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
         $map = [];
         foreach ($rows as $r) {
-            $map[(int)$r['listing_id']][] = $r['photo_url'];
+            $lid = (int)$r['listing_id'];
+            $url = $r['photo_url'];
+            // Normalise relative URLs
+            if (!empty($url) && str_starts_with($url, '/uploads/')) {
+                $url = 'http://localhost:8000' . $url;
+            }
+            $map[$lid][] = $url;
         }
         return $map;
     }
 
-    // ── Enrich a single row with photos + coords + type-safe booleans ────────
     private function enrichRow(array &$row, array $photoMap = []): void {
         $id = (int)$row['id'];
-
-        // Photos — use pre-fetched map (batch) or fall through to fallback
         $photos = $photoMap[$id] ?? [];
         if (empty($photos) && !empty($row['cover_photo'])) {
             $photos = [$row['cover_photo']];
@@ -119,9 +115,7 @@ class PropertyController {
         }
         $row['cover_photo'] = $photos[0];
         $row['photos']      = $photos;
-        unset($row['_cover_raw']); // cleanup if present
 
-        // Coordinates
         $coords = $this->parseCoordinates($row['coordinates'] ?? null);
         if (!$coords) {
             $coords = $this->deriveCoords($row['city'] ?? '', $row['address'] ?? '');
@@ -130,7 +124,6 @@ class PropertyController {
         $row['lng'] = $coords['lng'];
         unset($row['coordinates']);
 
-        // Booleans
         $row['parking']        = (bool)($row['parking']        ?? false);
         $row['generator']      = (bool)($row['generator']      ?? false);
         $row['owner_verified'] = (bool)($row['owner_verified'] ?? false);
@@ -139,35 +132,52 @@ class PropertyController {
     // ── GET /public/properties ───────────────────────────────────────────────
     public function index(): void {
         try {
-            $city     = isset($_GET['city'])             ? trim($_GET['city'])             : null;
-            $txType   = isset($_GET['transaction_type']) ? trim($_GET['transaction_type']) : null;
-            $propType = isset($_GET['property_type'])    ? trim($_GET['property_type'])    : null;
-            $priceMin = isset($_GET['price_min'])  && $_GET['price_min'] !== '' ? (int)$_GET['price_min']  : null;
-            $priceMax = isset($_GET['price_max'])  && $_GET['price_max'] !== '' ? (int)$_GET['price_max']  : null;
-            $bedrooms = isset($_GET['bedrooms'])   && $_GET['bedrooms']  !== '' ? (int)$_GET['bedrooms']   : null;
-            $q        = isset($_GET['q'])          && $_GET['q']         !== '' ? trim($_GET['q'])          : null;
-            $limit    = min((int)($_GET['limit']  ?? 20), 100);
-            $offset   = max((int)($_GET['offset'] ?? 0), 0);
+            // ── Collect all possible param aliases ──────────────────────────
+            // Location: city, search, q, neighborhood — all mean the same thing
+            $rawSearch = null;
+            foreach (['search', 'q', 'city', 'neighborhood', 'neighbourhood'] as $key) {
+                if (!empty($_GET[$key])) { $rawSearch = trim($_GET[$key]); break; }
+            }
 
-            // listingType / type alias  (rent | buy→sale | sale)
-            foreach (['listingType', 'type'] as $key) {
-                if (!$txType && !empty($_GET[$key])) {
+            // Transaction type: listingType, type, transaction_type
+            $txType = null;
+            foreach (['listingType', 'type', 'transaction_type'] as $key) {
+                if (!empty($_GET[$key])) {
                     $raw    = strtolower(trim($_GET[$key]));
-                    $txType = ($raw === 'buy') ? 'sale' : $raw;
-                    break;
+                    $txType = ($raw === 'buy' || $raw === 'for sale' || $raw === 'sale') ? 'sale'
+                            : (($raw === 'for rent' || $raw === 'rent') ? 'rent' : null);
+                    if ($txType) break;
                 }
             }
 
-            $where  = ["l.status IN ('approved', 'pending')"];
+            $propType = !empty($_GET['property_type']) ? trim($_GET['property_type']) : null;
+            $priceMin = isset($_GET['price_min']) && $_GET['price_min'] !== '' ? (int)$_GET['price_min'] : null;
+            $priceMax = isset($_GET['price_max']) && $_GET['price_max'] !== '' ? (int)$_GET['price_max'] : null;
+            $bedrooms = isset($_GET['bedrooms'])  && $_GET['bedrooms']  !== '' ? (int)$_GET['bedrooms']  : null;
+            $bathrooms = isset($_GET['bathrooms']) && $_GET['bathrooms'] !== '' ? (int)$_GET['bathrooms'] : null;
+            $limit    = min((int)($_GET['limit']  ?? 50), 100);
+            $offset   = max((int)($_GET['offset'] ?? 0),  0);
+
+            $where  = ["l.status = 'approved'"];
             $params = [];
 
-            if ($city) {
-                // Match either city name or address containing city string
-                $where[]         = "(LOWER(l.city) = LOWER(:city) OR LOWER(l.address) LIKE LOWER(:city_like))";
-                $params[':city'] = $city;
-                $params[':city_like'] = '%' . $city . '%';
+            // ── Smart location search ────────────────────────────────────────
+            // Matches: city, region, address, neighbourhood — case-insensitive
+            if ($rawSearch) {
+                $like = '%' . $rawSearch . '%';
+                $where[] = "(
+                    LOWER(l.city)    LIKE LOWER(:loc1)
+                    OR LOWER(l.region)  LIKE LOWER(:loc2)
+                    OR LOWER(l.address) LIKE LOWER(:loc3)
+                    OR LOWER(l.title)   LIKE LOWER(:loc4)
+                )";
+                $params[':loc1'] = $like;
+                $params[':loc2'] = $like;
+                $params[':loc3'] = $like;
+                $params[':loc4'] = $like;
             }
-            if ($txType && in_array($txType, ['rent', 'sale'], true)) {
+
+            if ($txType) {
                 $where[]            = "l.transaction_type = :tx_type";
                 $params[':tx_type'] = $txType;
             }
@@ -187,23 +197,34 @@ class PropertyController {
                 $where[]             = "l.bedrooms >= :bedrooms";
                 $params[':bedrooms'] = $bedrooms;
             }
-            if ($q) {
-                $like = '%' . $q . '%';
-                $where[]        = "(l.title LIKE :q1 OR l.address LIKE :q2 OR l.city LIKE :q3 OR l.description LIKE :q4)";
-                $params[':q1']  = $like;
-                $params[':q2']  = $like;
-                $params[':q3']  = $like;
-                $params[':q4']  = $like;
+            if ($bathrooms !== null) {
+                $where[]              = "l.bathrooms >= :bathrooms";
+                $params[':bathrooms'] = $bathrooms;
+            }
+            // ── Bbox filter (geo-boundary from Nominatim) ────────────────
+            $latMin = isset($_GET['lat_min']) && $_GET['lat_min'] !== '' ? (float)$_GET['lat_min'] : null;
+            $latMax = isset($_GET['lat_max']) && $_GET['lat_max'] !== '' ? (float)$_GET['lat_max'] : null;
+            $lngMin = isset($_GET['lng_min']) && $_GET['lng_min'] !== '' ? (float)$_GET['lng_min'] : null;
+            $lngMax = isset($_GET['lng_max']) && $_GET['lng_max'] !== '' ? (float)$_GET['lng_max'] : null;
+
+            if ($latMin !== null && $latMax !== null && $lngMin !== null && $lngMax !== null) {
+                // Parse coordinates column "lat,lng" inline — no schema change needed
+                $where[] = "(
+                    CAST(SUBSTRING_INDEX(l.coordinates, ',', 1) AS DECIMAL(10,6)) BETWEEN :lat_min AND :lat_max
+                    AND CAST(SUBSTRING_INDEX(l.coordinates, ',', -1) AS DECIMAL(10,6)) BETWEEN :lng_min AND :lng_max
+                )";
+                $params[':lat_min'] = $latMin;
+                $params[':lat_max'] = $latMax;
+                $params[':lng_min'] = $lngMin;
+                $params[':lng_max'] = $lngMax;
             }
 
             $wc = implode(' AND ', $where);
 
-            // Total count
             $countStmt = $this->db->prepare("SELECT COUNT(*) FROM listings l WHERE {$wc}");
             $countStmt->execute($params);
             $total = (int)$countStmt->fetchColumn();
 
-            // Main query — NO subqueries, NO JSON_ARRAYAGG (MySQL 5.7 safe)
             $sql = "
                 SELECT
                     l.id, l.title, l.description, l.price, l.address, l.city, l.region,
@@ -212,7 +233,11 @@ class PropertyController {
                     l.furnished, l.parking, l.generator,
                     l.floor, l.total_floors, l.year_built, l.coordinates,
                     l.approved_at,
-                    u.bio        AS owner_bio
+                    u.id         AS owner_id,
+                    u.name       AS owner_name,
+                    u.avatar_url AS owner_avatar,
+                    u.bio        AS owner_bio,
+                    u.role       AS owner_role
                 FROM listings l
                 JOIN users u ON u.id = l.user_id
                 WHERE {$wc}
@@ -229,12 +254,15 @@ class PropertyController {
             $stmt->execute();
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // Batch-fetch photos for all returned listing IDs
             $ids      = array_column($rows, 'id');
             $photoMap = $this->fetchPhotos($ids);
 
             foreach ($rows as &$row) {
                 $this->enrichRow($row, $photoMap);
+                // Normalise owner avatar
+                if (!empty($row['owner_avatar']) && str_starts_with($row['owner_avatar'], '/uploads/')) {
+                    $row['owner_avatar'] = 'http://localhost:8000' . $row['owner_avatar'];
+                }
             }
             unset($row);
 
@@ -249,10 +277,7 @@ class PropertyController {
     public function show(array $params): void {
         try {
             $id = (int)($params['id'] ?? 0);
-            if ($id <= 0) {
-                $this->json(['error' => 'Invalid ID'], 400);
-                return;
-            }
+            if ($id <= 0) { $this->json(['error' => 'Invalid ID'], 400); return; }
 
             $stmt = $this->db->prepare("
                 SELECT l.*,
@@ -263,7 +288,8 @@ class PropertyController {
                     u.verified   AS owner_verified,
                     u.role       AS owner_role,
                     u.agency_name,
-                    u.bio        AS owner_bio
+                    u.bio        AS owner_bio,
+                    JSON_UNQUOTE(JSON_EXTRACT(u.profile_meta, '$.whatsapp')) AS owner_whatsapp
                 FROM listings l
                 JOIN users u ON u.id = l.user_id
                 WHERE l.id = :id AND l.status IN ('approved', 'pending')
@@ -271,18 +297,22 @@ class PropertyController {
             $stmt->execute([':id' => $id]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if (!$row) {
-                $this->json(['error' => 'Listing not found'], 404);
-                return;
-            }
+            if (!$row) { $this->json(['error' => 'Listing not found'], 404); return; }
 
-            // Fetch photos separately (MySQL 5.7 safe)
             $photoMap = $this->fetchPhotos([$id]);
             $this->enrichRow($row, $photoMap);
 
-            $row['fraud_signals']    = null; // never expose to public
-            $row['admin_notes']      = null;
-            $row['rejected_reason']  = null;
+            if (!empty($row['owner_avatar']) && str_starts_with($row['owner_avatar'], '/uploads/')) {
+                $row['owner_avatar'] = 'http://localhost:8000' . $row['owner_avatar'];
+            }
+
+            if (empty($row['owner_whatsapp']) || $row['owner_whatsapp'] === 'null') {
+                $row['owner_whatsapp'] = $row['owner_phone'] ?? null;
+            }
+
+            $row['fraud_signals']   = null;
+            $row['admin_notes']     = null;
+            $row['rejected_reason'] = null;
 
             $this->json($row);
 

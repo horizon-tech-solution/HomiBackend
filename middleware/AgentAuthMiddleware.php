@@ -5,32 +5,38 @@ require_once __DIR__ . '/../config/user_auth.php';
 class AgentAuthMiddleware {
 
     public function authenticate(): ?array {
-        $headers    = getallheaders();
-        $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+        // ── 1. Try httpOnly cookie first ──────────────────────────────────
+        $token = getTokenFromCookie();
 
-        if (!str_starts_with($authHeader, 'Bearer ')) {
-            http_response_code(401);
-            header('Content-Type: application/json');
-            echo json_encode(['error' => 'No token provided']);
-            exit;
+        // ── 2. Fall back to Authorization header (transition period) ──────
+        if (!$token) {
+            $headers    = getallheaders();
+            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+            if (str_starts_with($authHeader, 'Bearer ')) {
+                $token = substr($authHeader, 7);
+            }
         }
 
-        $token   = substr($authHeader, 7);
-        $payload = UserAuth::validateToken($token); // uses validateToken, not verifyToken
+        if (!$token) {
+            $this->abort(401, 'No token provided');
+        }
+
+        $payload = UserAuth::validateToken($token);
 
         if (!$payload) {
-            http_response_code(401);
-            header('Content-Type: application/json');
-            echo json_encode(['error' => 'Invalid or expired token']);
-            exit;
+            $this->abort(401, 'Invalid or expired token');
+        }
+
+        // ── Reject non-agent tokens at token level ────────────────────────
+        // Prevents a user token from accessing agent routes even if the DB
+        // record somehow has role = 'agent'
+        if (($payload['role'] ?? '') !== 'agent') {
+            $this->abort(403, 'Agent access required');
         }
 
         $userId = $payload['sub'] ?? null;
         if (!$userId) {
-            http_response_code(401);
-            header('Content-Type: application/json');
-            echo json_encode(['error' => 'Invalid token payload']);
-            exit;
+            $this->abort(401, 'Invalid token payload');
         }
 
         $db   = (new Database())->getConnection();
@@ -42,19 +48,20 @@ class AgentAuthMiddleware {
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$user) {
-            http_response_code(403);
-            header('Content-Type: application/json');
-            echo json_encode(['error' => 'Agent account not found']);
-            exit;
+            $this->abort(403, 'Agent account not found');
         }
 
         if ($user['status'] === 'blocked') {
-            http_response_code(403);
-            header('Content-Type: application/json');
-            echo json_encode(['error' => 'Account suspended']);
-            exit;
+            $this->abort(403, 'Account suspended');
         }
 
         return $user;
+    }
+
+    private function abort(int $code, string $message): void {
+        http_response_code($code);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => $message]);
+        exit;
     }
 }

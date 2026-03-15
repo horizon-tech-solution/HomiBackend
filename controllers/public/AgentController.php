@@ -12,11 +12,15 @@ class AgentController {
     public function index(): void {
         ob_start();
         try {
-            $city   = $_GET['city']  ?? null;
-            $limit  = min((int)($_GET['limit']  ?? 10), 50);
+            // Location: city, search, q — all accepted
+            $rawSearch = null;
+            foreach (['search', 'q', 'city'] as $key) {
+                if (!empty($_GET[$key])) { $rawSearch = trim($_GET[$key]); break; }
+            }
+            $name   = !empty($_GET['name'])   ? trim($_GET['name'])   : null;
+            $limit  = min((int)($_GET['limit']  ?? 50), 100);
             $offset = (int)($_GET['offset'] ?? 0);
 
-            // Only show active + verified agents to the public
             $where  = [
                 "u.role = 'agent'",
                 "u.status = 'active'",
@@ -24,9 +28,25 @@ class AgentController {
             ];
             $params = [];
 
-            if ($city) {
-                $where[]         = "LOWER(u.city) = LOWER(:city)";
-                $params[':city'] = $city;
+            // Location filter — matches city, region, address
+            if ($rawSearch) {
+                $like = '%' . $rawSearch . '%';
+                $where[] = "(
+                    LOWER(u.city) LIKE LOWER(:loc1)
+                    OR LOWER(u.name) LIKE LOWER(:loc2)
+                    OR LOWER(u.agency_name) LIKE LOWER(:loc3)
+                )";
+                $params[':loc1'] = $like;
+                $params[':loc2'] = $like;
+                $params[':loc3'] = $like;
+            }
+
+            // Explicit name filter (from FindAgent name tab)
+            if ($name) {
+                $like = '%' . $name . '%';
+                $where[] = "(LOWER(u.name) LIKE LOWER(:name1) OR LOWER(u.agency_name) LIKE LOWER(:name2))";
+                $params[':name1'] = $like;
+                $params[':name2'] = $like;
             }
 
             $wc = implode(' AND ', $where);
@@ -42,16 +62,15 @@ class AgentController {
                     u.years_experience, u.bio, u.avatar_url,
                     u.verified, u.verification_status,
                     u.profile_meta,
-                    COALESCE(COUNT(DISTINCT l.id), 0)        AS listings_count,
-                    COALESCE(ROUND(AVG(r.rating), 1), 0)     AS avg_rating,
-                    COUNT(DISTINCT r.id)                     AS review_count
+                    COALESCE(COUNT(DISTINCT l.id), 0)    AS listings_count,
+                    COALESCE(ROUND(AVG(r.rating), 1), 0) AS avg_rating,
+                    COUNT(DISTINCT r.id)                 AS review_count
                 FROM users u
-                LEFT JOIN listings l ON l.user_id = u.id
-                    AND l.status IN ('approved', 'pending')
-                LEFT JOIN reviews r ON r.agent_id = u.id
+                LEFT JOIN listings l ON l.user_id = u.id AND l.status = 'approved'
+                LEFT JOIN reviews r  ON r.agent_id = u.id
                 WHERE {$wc}
                 GROUP BY u.id
-                ORDER BY listings_count DESC, avg_rating DESC
+                ORDER BY avg_rating DESC, listings_count DESC
                 LIMIT :limit OFFSET :offset
             ";
             $stmt = $this->db->prepare($sql);
@@ -81,16 +100,12 @@ class AgentController {
         }
     }
 
-    // GET /public/agents/:id
+    // GET /public/agents/:id  — unchanged
     public function show(array $params): void {
         ob_start();
         try {
             $id = (int)($params['id'] ?? 0);
-            if ($id <= 0) {
-                ob_end_clean();
-                $this->json(['error' => 'Invalid ID'], 400);
-                return;
-            }
+            if ($id <= 0) { ob_end_clean(); $this->json(['error' => 'Invalid ID'], 400); return; }
 
             $stmt = $this->db->prepare("
                 SELECT
@@ -98,7 +113,7 @@ class AgentController {
                     u.agency_name, u.agency_type, u.license_number,
                     u.years_experience, u.bio, u.avatar_url,
                     u.verified, u.verification_status,
-                    u.listings_count, u.profile_meta,
+                    u.listings_count, u.profile_meta, u.notification_preferences,
                     COALESCE(ROUND(AVG(r.rating), 1), 0) AS avg_rating,
                     COUNT(r.id) AS review_count
                 FROM users u
@@ -112,11 +127,7 @@ class AgentController {
             $stmt->execute([':id' => $id]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            if (!$row) {
-                ob_end_clean();
-                $this->json(['error' => 'Agent not found'], 404);
-                return;
-            }
+            if (!$row) { ob_end_clean(); $this->json(['error' => 'Agent not found'], 404); return; }
 
             $row['verified']       = (bool)$row['verified'];
             $row['avg_rating']     = (float)$row['avg_rating'];
@@ -126,27 +137,22 @@ class AgentController {
                 $row['avatar_url'] = 'http://localhost:8000' . $row['avatar_url'];
             }
 
-            // Agent's listings (approved + pending) — MySQL 5.7 safe
             $lStmt = $this->db->prepare("
                 SELECT l.id, l.title, l.price, l.address, l.city,
                        l.transaction_type, l.property_type,
                        l.bedrooms, l.bathrooms, l.area, l.status
                 FROM listings l
-                WHERE l.user_id = :uid
-                  AND l.status IN ('approved', 'pending')
-                ORDER BY l.submitted_at DESC
-                LIMIT 12
+                WHERE l.user_id = :uid AND l.status = 'approved'
+                ORDER BY l.submitted_at DESC LIMIT 12
             ");
             $lStmt->execute([':uid' => $id]);
             $listings = $lStmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // Batch-fetch cover photos (MySQL 5.7 safe — no subqueries)
             if (!empty($listings)) {
                 $ids = array_column($listings, 'id');
                 $ph  = implode(',', array_fill(0, count($ids), '?'));
                 $pStmt = $this->db->prepare(
-                    "SELECT listing_id, photo_url
-                     FROM listing_photos
+                    "SELECT listing_id, photo_url FROM listing_photos
                      WHERE listing_id IN ({$ph})
                      ORDER BY listing_id, is_cover DESC, sort_order ASC"
                 );
@@ -154,7 +160,13 @@ class AgentController {
                 $photoMap = [];
                 foreach ($pStmt->fetchAll(PDO::FETCH_ASSOC) as $p) {
                     $lid = (int)$p['listing_id'];
-                    if (!isset($photoMap[$lid])) $photoMap[$lid] = $p['photo_url'];
+                    if (!isset($photoMap[$lid])) {
+                        $url = $p['photo_url'];
+                        if (!empty($url) && str_starts_with($url, '/uploads/')) {
+                            $url = 'http://localhost:8000' . $url;
+                        }
+                        $photoMap[$lid] = $url;
+                    }
                 }
                 foreach ($listings as &$l) {
                     $l['cover_photo'] = $photoMap[(int)$l['id']] ?? null;

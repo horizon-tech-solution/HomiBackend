@@ -15,7 +15,7 @@ class UserAuth {
         $payload = [
             'iss'   => 'homi-api',
             'iat'   => time(),
-            'exp'   => time() + (60 * 60 * 24 * 7), // 7 days
+            'exp'   => time() + (60 * 60 * 24 * 7),
             'sub'   => $userId,
             'email' => $email,
             'role'  => $role,
@@ -31,7 +31,6 @@ class UserAuth {
             );
             $payload = (array) $decoded;
 
-            // Block admin tokens from being used on user/agent routes
             if (($payload['role'] ?? null) === 'admin') {
                 return null;
             }
@@ -41,4 +40,34 @@ class UserAuth {
             return null;
         }
     }
+}  // ← class ends HERE
+
+// ── Cookie helpers — outside the class ───────────────────────────────────────
+
+function setAuthCookie(string $token, int $days = 30): void {
+    $secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    setcookie('homi_token', $token, [
+        'expires'  => time() + ($days * 24 * 60 * 60),
+        'path'     => '/',
+        'domain'   => '',
+        'secure'   => $secure,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
+
+function clearAuthCookie(): void {
+    $secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+    setcookie('homi_token', '', [
+        'expires'  => time() - 3600,
+        'path'     => '/',
+        'domain'   => '',
+        'secure'   => $secure,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+}
+
+function getTokenFromCookie(): ?string {
+    return $_COOKIE['homi_token'] ?? null;
 }
