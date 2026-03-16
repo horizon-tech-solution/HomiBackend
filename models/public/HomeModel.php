@@ -130,7 +130,7 @@ class HomeModel {
             $row['review_count']   = (int)$row['review_count'];
             $row['listings_count'] = (int)$row['listings_count'];
             if (!empty($row['avatar_url']) && str_starts_with($row['avatar_url'], '/uploads/')) {
-                $row['avatar_url'] = 'http://localhost:8000' . $row['avatar_url'];
+                $row['avatar_url'] = 'https://homibackend-production.up.railway.app/' . $row['avatar_url'];
             }
         }
         return $rows;

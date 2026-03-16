@@ -95,7 +95,7 @@ class AuthController {
         // Normalise avatar URL
         $avatarUrl = $user['avatar_url'] ?? null;
         if ($avatarUrl && str_starts_with($avatarUrl, '/uploads/')) {
-            $avatarUrl = 'http://localhost:8000' . $avatarUrl;
+            $avatarUrl = 'https://homibackend-production.up.railway.app/' . $avatarUrl;
         }
 
         jsonResponse([

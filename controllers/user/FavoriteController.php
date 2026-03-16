@@ -64,7 +64,7 @@ class FavoriteController {
                     $cover = $photoMap[(int)$row['id']] ?? null;
                     $row['cover_photo']    = $cover
                         ? (str_starts_with($cover, '/uploads/')
-                            ? 'http://localhost:8000' . $cover
+                            ? 'https://homibackend-production.up.railway.app/' . $cover
                             : $cover)
                         : null;
                     $row['owner_verified'] = (bool)$row['owner_verified'];
@@ -74,7 +74,7 @@ class FavoriteController {
                     $row['area']           = (int)$row['area'];
                     $row['is_favorited']   = true;
                     if (!empty($row['owner_avatar']) && str_starts_with($row['owner_avatar'], '/uploads/')) {
-                        $row['owner_avatar'] = 'http://localhost:8000' . $row['owner_avatar'];
+                        $row['owner_avatar'] = 'https://homibackend-production.up.railway.app/' . $row['owner_avatar'];
                     }
                 }
                 unset($row);

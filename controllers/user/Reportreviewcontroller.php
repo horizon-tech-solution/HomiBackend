@@ -172,7 +172,7 @@ class ReportReviewController {
 
             foreach ($rows as &$r) {
                 if (!empty($r['reviewer_avatar']) && str_starts_with($r['reviewer_avatar'], '/uploads/')) {
-                    $r['reviewer_avatar'] = 'http://localhost:8000' . $r['reviewer_avatar'];
+                    $r['reviewer_avatar'] = 'https://homibackend-production.up.railway.app/' . $r['reviewer_avatar'];
                 }
                 $r['rating'] = (int)$r['rating'];
             }

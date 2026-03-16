@@ -96,7 +96,7 @@ class PropertyController {
             $url = $r['photo_url'];
             // Normalise relative URLs
             if (!empty($url) && str_starts_with($url, '/uploads/')) {
-                $url = 'http://localhost:8000' . $url;
+                $url = 'https://homibackend-production.up.railway.app/' . $url;
             }
             $map[$lid][] = $url;
         }
@@ -261,7 +261,7 @@ class PropertyController {
                 $this->enrichRow($row, $photoMap);
                 // Normalise owner avatar
                 if (!empty($row['owner_avatar']) && str_starts_with($row['owner_avatar'], '/uploads/')) {
-                    $row['owner_avatar'] = 'http://localhost:8000' . $row['owner_avatar'];
+                    $row['owner_avatar'] = 'https://homibackend-production.up.railway.app/' . $row['owner_avatar'];
                 }
             }
             unset($row);
@@ -303,7 +303,7 @@ class PropertyController {
             $this->enrichRow($row, $photoMap);
 
             if (!empty($row['owner_avatar']) && str_starts_with($row['owner_avatar'], '/uploads/')) {
-                $row['owner_avatar'] = 'http://localhost:8000' . $row['owner_avatar'];
+                $row['owner_avatar'] = 'https://homibackend-production.up.railway.app/' . $row['owner_avatar'];
             }
 
             if (empty($row['owner_whatsapp']) || $row['owner_whatsapp'] === 'null') {

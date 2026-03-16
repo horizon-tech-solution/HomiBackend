@@ -39,7 +39,7 @@ class ViewHistory {
         // Normalise photo URL
         foreach ($rows as &$r) {
             if (!empty($r['photo_url']) && str_starts_with($r['photo_url'], '/uploads/')) {
-                $r['photo_url'] = 'http://localhost:8000' . $r['photo_url'];
+                $r['photo_url'] = 'https://homibackend-production.up.railway.app/' . $r['photo_url'];
             }
         }
         unset($r);

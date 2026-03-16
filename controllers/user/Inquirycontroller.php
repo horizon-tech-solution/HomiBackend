@@ -124,12 +124,12 @@ class InquiryController {
                     $cover = $photoMap[(int)$row['listing_id']] ?? null;
                     $row['listing_cover'] = $cover
                         ? (str_starts_with($cover, '/uploads/')
-                            ? 'http://localhost:8000' . $cover
+                            ? 'https://homibackend-production.up.railway.app/' . $cover
                             : $cover)
                         : null;
 
                     if (!empty($row['agent_avatar']) && str_starts_with($row['agent_avatar'], '/uploads/')) {
-                        $row['agent_avatar'] = 'http://localhost:8000' . $row['agent_avatar'];
+                        $row['agent_avatar'] = 'https://homibackend-production.up.railway.app/' . $row['agent_avatar'];
                     }
 
                     $row['listing_price']  = (int)$row['listing_price'];
@@ -192,7 +192,7 @@ class InquiryController {
 
             foreach ($msgs as &$m) {
                 if (!empty($m['sender_avatar']) && str_starts_with($m['sender_avatar'], '/uploads/')) {
-                    $m['sender_avatar'] = 'http://localhost:8000' . $m['sender_avatar'];
+                    $m['sender_avatar'] = 'https://homibackend-production.up.railway.app/' . $m['sender_avatar'];
                 }
                 $m['is_mine'] = (int)$m['sender_id'] === $userId;
             }

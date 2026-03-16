@@ -92,10 +92,10 @@ class Lead {
 
         foreach ($rows as &$row) {
             if (!empty($row['user_avatar']) && str_starts_with($row['user_avatar'], '/uploads/')) {
-                $row['user_avatar'] = 'http://localhost:8000' . $row['user_avatar'];
+                $row['user_avatar'] = 'https://homibackend-production.up.railway.app/' . $row['user_avatar'];
             }
             if (!empty($row['listing_photo']) && str_starts_with($row['listing_photo'], '/uploads/')) {
-                $row['listing_photo'] = 'http://localhost:8000' . $row['listing_photo'];
+                $row['listing_photo'] = 'https://homibackend-production.up.railway.app/' . $row['listing_photo'];
             }
             $row['message_count'] = (int)$row['message_count'];
         }
@@ -171,10 +171,10 @@ class Lead {
         if (!$lead) return null;
 
         if (!empty($lead['user_avatar']) && str_starts_with($lead['user_avatar'], '/uploads/')) {
-            $lead['user_avatar'] = 'http://localhost:8000' . $lead['user_avatar'];
+            $lead['user_avatar'] = 'https://homibackend-production.up.railway.app/' . $lead['user_avatar'];
         }
         if (!empty($lead['listing_photo']) && str_starts_with($lead['listing_photo'], '/uploads/')) {
-            $lead['listing_photo'] = 'http://localhost:8000' . $lead['listing_photo'];
+            $lead['listing_photo'] = 'https://homibackend-production.up.railway.app/' . $lead['listing_photo'];
         }
 
         // ── Fetch messages — use sender_id to determine bubble side ──────────
@@ -199,7 +199,7 @@ class Lead {
 
         foreach ($msgs as &$m) {
             if (!empty($m['sender_avatar']) && str_starts_with($m['sender_avatar'], '/uploads/')) {
-                $m['sender_avatar'] = 'http://localhost:8000' . $m['sender_avatar'];
+                $m['sender_avatar'] = 'https://homibackend-production.up.railway.app/' . $m['sender_avatar'];
             }
             // ── is_mine: true when this message was sent by the viewing agent ──
             $m['is_mine'] = ((int)$m['sender_id'] === $userId);

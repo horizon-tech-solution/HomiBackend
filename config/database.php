@@ -9,11 +9,11 @@ class Database {
     private ?PDO $pdo = null;
 
     public function __construct() {
-        $this->host   = $_ENV['DB_HOST'] ?? 'localhost';
+        $this->host   = $_ENV['DB_HOST'] ?? 'bp73o4lklwrsh9u3qr4l-mysql.services.clever-cloud.com';
         $this->port   = $_ENV['DB_PORT'] ?? '3306';
-        $this->dbname = $_ENV['DB_NAME'] ?? 'homi';
-        $this->user   = $_ENV['DB_USER'] ?? 'root';
-        $this->pass   = $_ENV['DB_PASS'] ?? '';
+        $this->dbname = $_ENV['DB_NAME'] ?? 'bp73o4lklwrsh9u3qr4l';
+        $this->user   = $_ENV['DB_USER'] ?? 'uqz4bxbhmnceb6np';
+        $this->pass   = $_ENV['DB_PASS'] ?? 'SsRWvU3uxaYD6DrZwBBD';
     }
 
     public function getConnection(): PDO {

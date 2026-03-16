@@ -286,7 +286,7 @@ public function uploadAvatar() {
             jsonResponse(['error' => 'Failed to save image'], 500);
         }
 
-        $appUrl    = $_ENV['APP_URL'] ?? 'http://localhost:8000';
+        $appUrl    = $_ENV['APP_URL'] ?? 'https://homibackend-production.up.railway.app/';
         $avatarUrl = $appUrl . '/uploads/avatars/' . $filename;
 
         $update = $this->db->prepare("UPDATE users SET avatar_url = ? WHERE id = ?");
