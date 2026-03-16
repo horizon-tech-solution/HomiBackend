@@ -2,7 +2,7 @@
 	frankenphp
 }
 
-:80 {
+:{$PORT} {
 	root * /app/public
 	php_server
 }
