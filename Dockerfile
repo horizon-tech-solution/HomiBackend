@@ -1,5 +1,6 @@
 FROM dunglas/frankenphp:php8.4.19-bookworm
 
+# Install PHP extensions
 RUN install-php-extensions \
     pdo \
     pdo_mysql \
