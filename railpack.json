@@ -1,0 +1,5 @@
+{
+  "php": {
+    "extensions": ["pdo", "pdo_mysql", "mbstring", "curl", "gd", "openssl"]
+  }
+}
