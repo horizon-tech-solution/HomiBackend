@@ -1,5 +1,12 @@
 FROM dunglas/frankenphp:php8.4.19-bookworm
 
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
+    zip \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install PHP extensions
 RUN install-php-extensions \
     pdo \
@@ -7,7 +14,8 @@ RUN install-php-extensions \
     mbstring \
     curl \
     gd \
-    openssl
+    openssl \
+    zip
 
 # Install composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
