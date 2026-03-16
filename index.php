@@ -1,5 +1,5 @@
 <?php
-ini_set('display_errors', 0);
+ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 header('Access-Control-Allow-Origin: https://homi-three.vercel.app');
