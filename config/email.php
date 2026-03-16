@@ -125,7 +125,7 @@ class EmailService {
 
         $ctaButton = '';
         if (!empty($data['listing_id'])) {
-            $url = ($_ENV['APP_URL'] ?? 'https://prop-ty.netlify.app/') . '/properties?property=' . $data['listing_id'];
+            $url = ($_ENV['APP_URL'] ?? 'https://homi-three.vercel.app/') . '/properties?property=' . $data['listing_id'];
             $ctaButton = "<a href='{$url}' style='display:inline-block;background:#D97706;color:#fff;padding:12px 24px;border-radius:8px;font-weight:700;text-decoration:none;margin-top:16px'>View Property</a>";
         }
 
