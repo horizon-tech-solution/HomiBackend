@@ -7,3 +7,7 @@ RUN install-php-extensions \
     curl \
     gd \
     openssl
+
+COPY . /app/public
+
+WORKDIR /app/public
