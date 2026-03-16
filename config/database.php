@@ -9,11 +9,11 @@ class Database {
     private ?PDO $pdo = null;
 
     public function __construct() {
-        $this->host   = $_ENV['MYSQLHOST']     ?? '';
-        $this->port   = $_ENV['MYSQLPORT']     ?? '3306';
-        $this->dbname = $_ENV['MYSQLDATABASE'] ?? '';
-        $this->user   = $_ENV['MYSQLUSER']     ?? '';
-        $this->pass   = $_ENV['MYSQLPASSWORD'] ?? '';
+        $this->host   = $_ENV['MYSQLHOST']     ?? 'interchange.proxy.rlwy.net';
+        $this->port   = $_ENV['MYSQLPORT']     ?? '52678';
+        $this->dbname = $_ENV['MYSQLDATABASE'] ?? 'railway';
+        $this->user   = $_ENV['MYSQLUSER']     ?? 'root';
+        $this->pass   = $_ENV['MYSQLPASSWORD'] ?? 'QzpXrcjLHeSvPLRZhylCxBWwjziiRFlf';
     }
 
     public function getConnection(): PDO {
