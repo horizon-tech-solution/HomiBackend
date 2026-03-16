@@ -11,3 +11,5 @@ RUN install-php-extensions \
 COPY . /app/public
 
 WORKDIR /app/public
+
+CMD ["frankenphp", "run", "--config", "/app/public/Caddyfile"]
