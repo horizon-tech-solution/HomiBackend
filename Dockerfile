@@ -12,4 +12,6 @@ COPY . /app/public
 
 WORKDIR /app/public
 
+RUN composer install --optimize-autoloader --no-scripts --no-interaction
+
 CMD ["frankenphp", "run", "--config", "/app/public/Caddyfile"]
