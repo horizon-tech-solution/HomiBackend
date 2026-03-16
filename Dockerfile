@@ -16,6 +16,7 @@ COPY . /app/public
 
 WORKDIR /app/public
 
-RUN composer install --optimize-autoloader --no-scripts --no-interaction
+# Remove committed vendor folder and reinstall clean
+RUN rm -rf vendor && composer install --optimize-autoloader --no-scripts --no-interaction
 
 CMD ["frankenphp", "run", "--config", "/app/public/Caddyfile"]
