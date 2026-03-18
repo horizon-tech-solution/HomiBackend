@@ -106,7 +106,7 @@ class SettingsController {
         }
 
         // Delegate to Profile model (it has changePassword already)
-        require_once __DIR__ . '/../../models/agent/Profile.php';
+        require_once __DIR__ . '/../../models/agent/profile.php';
         $profile = new Profile($this->db);
         $result  = $profile->changePassword((int) $this->user['id'], $current, $new);
 
