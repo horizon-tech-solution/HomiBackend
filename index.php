@@ -1,14 +1,6 @@
 <?php
 
-// TEMPORARY DEBUG — remove after
-echo json_encode([
-    'index_dir' => __DIR__,
-    'files' => scandir(__DIR__),
-    'parent_files' => scandir(dirname(__DIR__)),
-]);
-exit;
-
-define('BASE_PATH', dirname(__DIR__));
+define('BASE_PATH', __DIR__);
 
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
