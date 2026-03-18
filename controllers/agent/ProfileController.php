@@ -1,6 +1,6 @@
 <?php
 // controllers/agent/ProfileController.php
-require_once __DIR__ . '/../../models/agent/Profile.php';
+require_once BASE_PATH . '/models/agent/Profile.php';
 
 class ProfileController {
     private $db;
