@@ -50,43 +50,39 @@ class ProfessionalController {
     }
 
     // Upload document for an application
-    public function uploadDocument($params) {
-        $applicationId = $params['id'] ?? null;
-        if (!$applicationId) jsonResponse(['error' => 'Application ID required'], 400);
+public function uploadDocument($params) {
+    $applicationId = $params['id'] ?? null;
+    if (!$applicationId) jsonResponse(['error' => 'Application ID required'], 400);
 
-        $appModel = new ProfessionalApplication($this->db);
-        $app = $appModel->getById($applicationId);
-        if (!$app || $app['user_id'] != $this->user['id']) {
-            jsonResponse(['error' => 'Application not found'], 404);
-        }
+    $stmt = $this->db->prepare(
+        "SELECT id FROM professional_applications WHERE id = ? AND user_id = ?"
+    );
+    $stmt->execute([$applicationId, $this->user['id']]);
+    if (!$stmt->fetch()) jsonResponse(['error' => 'Application not found'], 404);
 
-        $documentType = $_POST['document_type'] ?? '';
-        if (!in_array($documentType, ['id','land_title','license','business_reg'])) {
-            jsonResponse(['error' => 'Invalid document type'], 400);
-        }
+    if (empty($_FILES['document'])) jsonResponse(['error' => 'No file uploaded'], 400);
 
-        if (empty($_FILES['file'])) {
-            jsonResponse(['error' => 'No file uploaded'], 400);
-        }
+    $file    = $_FILES['document'];
+    $type    = $_POST['type'] ?? 'other';
+    $allowed = ['id', 'land_title', 'license', 'business_reg', 'other'];
+    if (!in_array($type, $allowed)) jsonResponse(['error' => 'Invalid document type'], 400);
 
-        $file = $_FILES['file'];
-        $uploadDir = __DIR__ . '/../../../public/uploads/professional_docs/';
-        if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+    $allowedMimes = ['image/jpeg', 'image/png', 'application/pdf'];
+    if (!in_array($file['type'], $allowedMimes)) jsonResponse(['error' => 'Only JPG, PNG, and PDF allowed'], 400);
+    if ($file['size'] > 5 * 1024 * 1024) jsonResponse(['error' => 'File must be under 5MB'], 400);
 
-        $fileName = uniqid() . '_' . basename($file['name']);
-        $targetPath = $uploadDir . $fileName;
-        if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-            $filePath = '/uploads/professional_docs/' . $fileName;
-            $docModel = new ApplicationDocument($this->db);
-            if ($docModel->create($applicationId, $documentType, $filePath)) {
-                jsonResponse(['path' => $filePath]);
-            } else {
-                jsonResponse(['error' => 'Failed to save document record'], 500);
-            }
-        } else {
-            jsonResponse(['error' => 'Failed to upload file'], 500);
-        }
-    }
+    require_once BASE_PATH . '/config/cloudinary.php';
+    $filePath = uploadToCloudinary($file['tmp_name'], 'applications/' . $applicationId);
+
+    $stmt = $this->db->prepare("
+        INSERT INTO application_documents (application_id, document_type, file_path, created_at)
+        VALUES (?, ?, ?, NOW())
+        ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), created_at = NOW()
+    ");
+    $stmt->execute([$applicationId, $type, $filePath]);
+
+    jsonResponse(['path' => $filePath]);
+}
 
     // Get user's applications and their documents
     public function index() {

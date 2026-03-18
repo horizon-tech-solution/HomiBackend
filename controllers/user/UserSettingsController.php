@@ -249,49 +249,25 @@ private static function defaultPrefs(): array {
 
 // ── POST /user/settings/avatar ────────────────────────────────────────────
 public function uploadAvatar() {
-        if (empty($_FILES['avatar'])) {
-            jsonResponse(['error' => 'No file uploaded'], 400);
-        }
-
-        $file     = $_FILES['avatar'];
-        $allowed  = ['image/jpeg', 'image/png', 'image/webp'];
-        $maxSize  = 5 * 1024 * 1024; // 5MB
-
-        if (!in_array($file['type'], $allowed)) {
-            jsonResponse(['error' => 'Only JPG, PNG, and WebP images are allowed'], 400);
-        }
-        if ($file['size'] > $maxSize) {
-            jsonResponse(['error' => 'Image must be under 5MB'], 400);
-        }
-
-        $uploadDir = __DIR__ . '/../../public/uploads/avatars/';
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
-        }
-
-        // Delete old avatar file if it exists
-        $stmt = $this->db->prepare("SELECT avatar_url FROM users WHERE id = ?");
-        $stmt->execute([$this->user['id']]);
-        $old = $stmt->fetchColumn();
-        if ($old) {
-            $oldFile = __DIR__ . '/../../public' . parse_url($old, PHP_URL_PATH);
-            if (file_exists($oldFile)) unlink($oldFile);
-        }
-
-        $ext      = match($file['type']) { 'image/png' => 'png', 'image/webp' => 'webp', default => 'jpg' };
-        $filename = 'user_' . $this->user['id'] . '_' . time() . '.' . $ext;
-        $dest     = $uploadDir . $filename;
-
-        if (!move_uploaded_file($file['tmp_name'], $dest)) {
-            jsonResponse(['error' => 'Failed to save image'], 500);
-        }
-
-        $appUrl    = $_ENV['APP_URL'] ?? 'https://homibackend-production.up.railway.app/';
-        $avatarUrl = $appUrl . '/uploads/avatars/' . $filename;
-
-        $update = $this->db->prepare("UPDATE users SET avatar_url = ? WHERE id = ?");
-        $update->execute([$avatarUrl, $this->user['id']]);
-
-        jsonResponse(['avatar_url' => $avatarUrl]);
+    if (empty($_FILES['avatar'])) {
+        jsonResponse(['error' => 'No file uploaded'], 400);
     }
+
+    $file    = $_FILES['avatar'];
+    $allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!in_array($file['type'], $allowed)) {
+        jsonResponse(['error' => 'Only JPG, PNG, and WebP images are allowed'], 400);
+    }
+    if ($file['size'] > 5 * 1024 * 1024) {
+        jsonResponse(['error' => 'Image must be under 5MB'], 400);
+    }
+
+    require_once BASE_PATH . '/config/cloudinary.php';
+    $avatarUrl = uploadToCloudinary($file['tmp_name'], 'avatars');
+
+    $update = $this->db->prepare("UPDATE users SET avatar_url = ? WHERE id = ?");
+    $update->execute([$avatarUrl, $this->user['id']]);
+
+    jsonResponse(['avatar_url' => $avatarUrl]);
+}
 }

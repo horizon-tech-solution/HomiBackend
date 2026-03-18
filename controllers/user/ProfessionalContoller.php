@@ -61,62 +61,39 @@ class UserProfessionalController {
     }
 
     // POST /user/professional/{id}/upload
-    public function uploadDocument($params) {
-        $applicationId = $params['id'] ?? null;
-        if (!$applicationId) {
-            jsonResponse(['error' => 'Application ID required'], 400);
-        }
+public function uploadDocument($params) {
+    $applicationId = $params['id'] ?? null;
+    if (!$applicationId) jsonResponse(['error' => 'Application ID required'], 400);
 
-        // Verify the application belongs to this user
-        $stmt = $this->db->prepare("SELECT id FROM professional_applications WHERE id = ? AND user_id = ?");
-        $stmt->execute([$applicationId, $this->user['id']]);
-        if (!$stmt->fetch()) {
-            jsonResponse(['error' => 'Application not found'], 404);
-        }
+    $stmt = $this->db->prepare(
+        "SELECT id FROM professional_applications WHERE id = ? AND user_id = ?"
+    );
+    $stmt->execute([$applicationId, $this->user['id']]);
+    if (!$stmt->fetch()) jsonResponse(['error' => 'Application not found'], 404);
 
-        if (empty($_FILES['document'])) {
-            jsonResponse(['error' => 'No file uploaded'], 400);
-        }
+    if (empty($_FILES['document'])) jsonResponse(['error' => 'No file uploaded'], 400);
 
-        $file    = $_FILES['document'];
-        $type    = $_POST['type'] ?? 'other';
-        $allowed = ['id', 'land_title', 'license', 'business_reg', 'other'];
+    $file    = $_FILES['document'];
+    $type    = $_POST['type'] ?? 'other';
+    $allowed = ['id', 'land_title', 'license', 'business_reg', 'other'];
+    if (!in_array($type, $allowed)) jsonResponse(['error' => 'Invalid document type'], 400);
 
-        if (!in_array($type, $allowed)) {
-            jsonResponse(['error' => 'Invalid document type'], 400);
-        }
+    $allowedMimes = ['image/jpeg', 'image/png', 'application/pdf'];
+    if (!in_array($file['type'], $allowedMimes)) jsonResponse(['error' => 'Only JPG, PNG, and PDF allowed'], 400);
+    if ($file['size'] > 5 * 1024 * 1024) jsonResponse(['error' => 'File must be under 5MB'], 400);
 
-        $allowedMimes = ['image/jpeg', 'image/png', 'application/pdf'];
-        if (!in_array($file['type'], $allowedMimes)) {
-            jsonResponse(['error' => 'Only JPG, PNG, and PDF allowed'], 400);
-        }
-        if ($file['size'] > 5 * 1024 * 1024) {
-            jsonResponse(['error' => 'File must be under 5MB'], 400);
-        }
+    require_once BASE_PATH . '/config/cloudinary.php';
+    $filePath = uploadToCloudinary($file['tmp_name'], 'applications/' . $applicationId);
 
-        $uploadDir = __DIR__ . '/../../public/uploads/applications/' . $applicationId . '/';
-        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+    $stmt = $this->db->prepare("
+        INSERT INTO application_documents (application_id, document_type, file_path, created_at)
+        VALUES (?, ?, ?, NOW())
+        ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), created_at = NOW()
+    ");
+    $stmt->execute([$applicationId, $type, $filePath]);
 
-        $ext      = pathinfo($file['name'], PATHINFO_EXTENSION);
-        $filename = $type . '_' . time() . '.' . strtolower($ext);
-        $dest     = $uploadDir . $filename;
-
-        if (!move_uploaded_file($file['tmp_name'], $dest)) {
-            jsonResponse(['error' => 'Failed to save file'], 500);
-        }
-
-        $filePath = '/uploads/applications/' . $applicationId . '/' . $filename;
-
-        // Save to DB
-        $stmt = $this->db->prepare("
-            INSERT INTO application_documents (application_id, document_type, file_path, created_at)
-            VALUES (?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE file_path = VALUES(file_path), created_at = NOW()
-        ");
-        $stmt->execute([$applicationId, $type, $filePath]);
-
-        jsonResponse(['path' => $filePath]);
-    }
+    jsonResponse(['path' => $filePath]);
+}
 
     // GET /user/professional/status
     public function status() {

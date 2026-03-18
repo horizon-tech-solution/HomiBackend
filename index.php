@@ -91,6 +91,8 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/user_auth.php';
 require_once __DIR__ . '/config/utils.php';
+require_once __DIR__ . '/config/cloudinary.php'; 
+
 require_once __DIR__ . '/middleware/AuthMiddleware.php';
 require_once __DIR__ . '/middleware/UserAuthMiddleware.php';
 require_once __DIR__ . '/middleware/AgentAuthMiddleware.php';

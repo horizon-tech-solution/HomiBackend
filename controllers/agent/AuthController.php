@@ -133,56 +133,43 @@ class AuthController {
     }
 
     // ── POST /agent/auth/upload-id  (authenticated) ───────────────────────────
-    public function uploadId() {
-        if (empty($_FILES['document'])) {
-            jsonResponse(['error' => 'No file uploaded'], 400);
-        }
-
-        $file    = $_FILES['document'];
-        $type    = $_POST['type'] ?? 'national_id';
-        $allowed = ['national_id', 'selfie'];
-
-        if (!in_array($type, $allowed)) $type = 'national_id';
-
-        $allowedMimes = ['image/jpeg', 'image/png', 'application/pdf'];
-        if (!in_array($file['type'], $allowedMimes)) {
-            jsonResponse(['error' => 'Only JPG, PNG, and PDF files are allowed'], 400);
-        }
-        if ($file['size'] > 5 * 1024 * 1024) {
-            jsonResponse(['error' => 'File must be under 5MB'], 400);
-        }
-
-        $userId    = $this->user['id'];
-        $uploadDir = __DIR__ . '/../../public/uploads/identity/' . $userId . '/';
-        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-
-        $ext      = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-        $filename = $type . '_' . time() . '.' . $ext;
-        $dest     = $uploadDir . $filename;
-
-        if (!move_uploaded_file($file['tmp_name'], $dest)) {
-            jsonResponse(['error' => 'Failed to save file. Please try again.'], 500);
-        }
-
-        $filePath     = '/uploads/identity/' . $userId . '/' . $filename;
-        $nationalIdNo = trim($_POST['national_id_number'] ?? '');
-
-        try {
-            $stmt = $this->db->prepare("
-                INSERT INTO agent_identity (user_id, national_id_number, {$type}_path, created_at)
-                VALUES (?, ?, ?, NOW())
-                ON DUPLICATE KEY UPDATE
-                    {$type}_path       = VALUES({$type}_path),
-                    national_id_number = IF(? != '', VALUES(national_id_number), national_id_number)
-            ");
-            $stmt->execute([$userId, $nationalIdNo, $filePath, $nationalIdNo]);
-        } catch (Exception $e) {
-            error_log('agent_identity upsert failed: ' . $e->getMessage());
-        }
-
-        jsonResponse(['success' => true, 'path' => $filePath]);
+public function uploadId() {
+    if (empty($_FILES['document'])) {
+        jsonResponse(['error' => 'No file uploaded'], 400);
     }
 
+    $file    = $_FILES['document'];
+    $type    = $_POST['type'] ?? 'national_id';
+    $allowed = ['national_id', 'selfie'];
+    if (!in_array($type, $allowed)) $type = 'national_id';
+
+    $allowedMimes = ['image/jpeg', 'image/png', 'application/pdf'];
+    if (!in_array($file['type'], $allowedMimes)) {
+        jsonResponse(['error' => 'Only JPG, PNG, and PDF files are allowed'], 400);
+    }
+    if ($file['size'] > 5 * 1024 * 1024) {
+        jsonResponse(['error' => 'File must be under 5MB'], 400);
+    }
+
+    require_once BASE_PATH . '/config/cloudinary.php';
+    $filePath     = uploadToCloudinary($file['tmp_name'], 'identity/' . $this->user['id']);
+    $nationalIdNo = trim($_POST['national_id_number'] ?? '');
+
+    try {
+        $stmt = $this->db->prepare("
+            INSERT INTO agent_identity (user_id, national_id_number, {$type}_path, created_at)
+            VALUES (?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE
+                {$type}_path       = VALUES({$type}_path),
+                national_id_number = IF(? != '', VALUES(national_id_number), national_id_number)
+        ");
+        $stmt->execute([$this->user['id'], $nationalIdNo, $filePath, $nationalIdNo]);
+    } catch (Exception $e) {
+        error_log('agent_identity upsert failed: ' . $e->getMessage());
+    }
+
+    jsonResponse(['success' => true, 'path' => $filePath]);
+}
     // ── POST /user/professional/apply ─────────────────────────────────────────
     public function apply() {
         $input = getJsonInput();
