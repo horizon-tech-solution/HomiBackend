@@ -1,5 +1,6 @@
 <?php
-
+echo json_encode(scandir(__DIR__ . '/controllers/user'));
+exit;
 
 define('BASE_PATH', __DIR__);
 
