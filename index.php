@@ -1,4 +1,13 @@
 <?php
+// TEMP cleanup - remove after running once
+$old = __DIR__ . '/controllers/user/Reportreviewcontroller.php';
+if (file_exists($old)) {
+    unlink($old);
+    echo json_encode(['deleted' => true]);
+} else {
+    echo json_encode(['already_gone' => true]);
+}
+exit;
 
 define('BASE_PATH', __DIR__);
 
