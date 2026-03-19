@@ -1,14 +1,5 @@
 <?php
-// TEMP - remove after running once
-$src  = __DIR__ . '/controllers/user/Reportreviewcontroller.php';
-$dest = __DIR__ . '/controllers/user/ReportReviewController.php';
-if (file_exists($src) && !file_exists($dest)) {
-    copy($src, $dest);
-    echo json_encode(['copied' => true]);
-} else {
-    echo json_encode(['src_exists' => file_exists($src), 'dest_exists' => file_exists($dest)]);
-}
-exit;
+
 define('BASE_PATH', __DIR__);
 
 ini_set('display_errors', 1);
