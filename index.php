@@ -1,5 +1,11 @@
 <?php
-
+echo json_encode([
+  'user_lower' => is_dir(__DIR__ . '/controllers/user'),
+  'user_upper' => is_dir(__DIR__ . '/controllers/User'),
+  'files_lower' => is_dir(__DIR__ . '/controllers/user') ? scandir(__DIR__ . '/controllers/user') : 'NOT FOUND',
+  'files_upper' => is_dir(__DIR__ . '/controllers/User') ? scandir(__DIR__ . '/controllers/User') : 'NOT FOUND',
+]);
+exit;
 define('BASE_PATH', __DIR__);
 
 ini_set('display_errors', 1);
