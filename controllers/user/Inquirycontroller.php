@@ -13,7 +13,7 @@ class InquiryController {
         $this->user = $user;
     }
 
-    // GET /user/inquiries
+    
     // Returns ALL threads where user is sender OR recipient
     public function index(array $params = []): void {
         ob_start();
