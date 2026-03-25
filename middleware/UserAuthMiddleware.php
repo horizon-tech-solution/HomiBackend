@@ -25,12 +25,7 @@ class UserAuthMiddleware {
 
         if (!$payload || empty($payload['sub'])) return null;
 
-        // ── Role check: only allow 'user' role on user-only routes ────────
-        // Remove this block if agents should also access user routes
-        // (e.g. browsing properties, favorites — which they likely should)
-        // Keep it if you want strict separation.
-        // Current decision: allow both 'user' and 'agent' on user routes
-        // since agents are also users of the platform.
+
         $role = $payload['role'] ?? '';
         if (!in_array($role, ['user', 'agent'])) {
             return null; // blocks admin tokens from user routes
