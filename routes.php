@@ -160,6 +160,7 @@ return [
     // ─────────────────────────────────────────────────────────────
     //  PUBLIC ROUTES
     // ─────────────────────────────────────────────────────────────
+    ['method' => 'GET', 'path' => 'health', 'handler' => 'Public\HealthController@index', 'auth' => false],
     ['method' => 'GET',  'path' => 'public/properties',      'handler' => 'Public\PropertyController@index', 'auth' => false],
     ['method' => 'GET',  'path' => 'public/properties/{id}', 'handler' => 'Public\PropertyController@show',  'auth' => false],
     ['method' => 'GET',  'path' => 'public/agents',          'handler' => 'Public\AgentController@index',    'auth' => false],
