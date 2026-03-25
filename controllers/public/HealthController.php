@@ -8,7 +8,7 @@ class HealthController {
         echo json_encode([
             'status' => 'ok',
             'timestamp' => time(),
-            'service' => 'HOMi Backend'
+            'service' => 'HOMi '
         ]);
         exit;
     }
